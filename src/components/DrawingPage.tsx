@@ -3,6 +3,9 @@ import { Palette, Minus, Plus, Eraser, Check, X, Flag } from 'lucide-react';
 import { getTimeOfDay } from '../lib/gameTypes';
 import type { MapType, TimeOfDay } from '../lib/gameTypes';
 
+const CANVAS_WIDTH = 3000;
+const CANVAS_HEIGHT = 5000;
+
 interface DrawingPageProps {
   round: number;
   totalRounds: number;
@@ -92,20 +95,18 @@ export default function DrawingPage({
       const container = containerRef.current;
       const canvas = canvasRef.current;
       if (!container || !canvas) return;
-      const w = container.clientWidth;
-      const h = container.clientHeight;
       // Save existing drawing
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = canvas.width;
       tempCanvas.height = canvas.height;
       tempCanvas.getContext('2d')?.drawImage(canvas, 0, 0);
 
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = CANVAS_WIDTH;
+      canvas.height = CANVAS_HEIGHT;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      ctx.drawImage(tempCanvas, 0, 0, w, h);
+      ctx.drawImage(tempCanvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     };
 
     resize();
@@ -172,7 +173,8 @@ export default function DrawingPage({
       ctx.lineJoin = 'round';
       ctx.stroke();
       ctx.restore();
-    } else {
+    }
+    else {
       ctx.strokeStyle = color;
       ctx.lineWidth = brushSize;
       ctx.lineCap = 'round';
