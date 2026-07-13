@@ -24,25 +24,25 @@ const COLORS = [
 
 function getCanvasBgColor(map: MapType, time: TimeOfDay): string {
   if (map === 'earth') {
-    if (time === 'day')  return '#bfefff'; // light sky blue
+    if (time === 'day') return '#bfefff'; // light sky blue
     if (time === 'dusk') return '#ffd580'; // warm amber
     return '#1a2744';                       // deep night blue
   }
   // space
-  if (time === 'day')  return '#0d1b4b'; // deep space blue
+  if (time === 'day') return '#0d1b4b'; // deep space blue
   if (time === 'dusk') return '#2d0a3e'; // nebula purple
   return '#050a14';                       // void black
 }
 
 function getHeaderColors(map: MapType, time: TimeOfDay) {
   if (map === 'earth') {
-    if (time === 'day')  return { bg: 'rgba(14,116,144,0.85)',  text: '#ffffff' };
-    if (time === 'dusk') return { bg: 'rgba(154,52,18,0.85)',   text: '#ffffff' };
-    return                      { bg: 'rgba(15,23,42,0.90)',    text: '#e2e8f0' };
+    if (time === 'day') return { bg: 'rgba(14,116,144,0.85)', text: '#ffffff' };
+    if (time === 'dusk') return { bg: 'rgba(154,52,18,0.85)', text: '#ffffff' };
+    return { bg: 'rgba(15,23,42,0.90)', text: '#e2e8f0' };
   }
-  if (time === 'day')  return { bg: 'rgba(13,27,75,0.90)',   text: '#c7d2fe' };
-  if (time === 'dusk') return { bg: 'rgba(45,10,62,0.90)',   text: '#f0abfc' };
-  return                      { bg: 'rgba(5,10,20,0.95)',    text: '#94a3b8' };
+  if (time === 'day') return { bg: 'rgba(13,27,75,0.90)', text: '#c7d2fe' };
+  if (time === 'dusk') return { bg: 'rgba(45,10,62,0.90)', text: '#f0abfc' };
+  return { bg: 'rgba(5,10,20,0.95)', text: '#94a3b8' };
 }
 
 export default function DrawingPage({
@@ -116,11 +116,20 @@ export default function DrawingPage({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Scroll to center on initial load
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container) {
+      container.scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
+      container.scrollTop = (container.scrollHeight - container.clientHeight) / 2;
+    }
+  }, []); // Empty dependency array ensures this runs only once on mount
+
   // On mount: restore previous snapshot so strokes accumulate across rounds
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
     if (prevPageUrl) {
       const img = new Image();
@@ -270,16 +279,38 @@ export default function DrawingPage({
 
       {/* Canvas — fills everything below header */}
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 w-full h-full"
-          style={{ touchAction: 'none', display: 'block', backgroundColor: canvasBg, transition: 'background-color 1s ease' }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-        />
+        <div
+          className="relative overflow-scroll w-full h-full"
+          style={{
+            width: '100%',
+            height: '100%',
+            overflow: 'scroll',
+          }}
+        >
+          <div
+            style={{
+              width: CANVAS_WIDTH,
+              height: CANVAS_HEIGHT,
+              position: 'relative',
+            }}
+          >
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0 w-full h-full"
+              style={{
+                touchAction: 'none',
+                display: 'block',
+                backgroundColor: canvasBg,
+                transition: 'background-color 1s ease',
+              }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+            />
+          </div>
+        </div>
 
         {/* Previous page overlay */}
         {showPrev && prevPageUrl && (
