@@ -62,7 +62,9 @@ export default function DrawingPage({
   const [isEraser, setIsEraser] = useState(false);
   const [toolOpen, setToolOpen] = useState(false);
   const [showPrev, setShowPrev] = useState(false);
+  const [moveMode, setMoveMode] = useState(false); // 新增 moveMode 狀態
   const lastPos = useRef<{ x: number; y: number } | null>(null);
+  const lastScrollPos = useRef<{ x: number; y: number } | null>(null); // 新增 lastScrollPos ref
 
   const timeOfDay = getTimeOfDay(round);
   const canvasBg = getCanvasBgColor(map, timeOfDay);
@@ -83,7 +85,7 @@ export default function DrawingPage({
   const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
     // Clear to transparent — CSS background-color provides the time-of-day color
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -96,22 +98,22 @@ export default function DrawingPage({
       const canvas = canvasRef.current;
       if (!container || !canvas) return;
       // Save existing drawing
-      const tempCanvas = document.createElement('canvas');
+      const tempCanvas = document.createElement("canvas");
       tempCanvas.width = canvas.width;
       tempCanvas.height = canvas.height;
-      tempCanvas.getContext('2d')?.drawImage(canvas, 0, 0);
+      tempCanvas.getContext("2d")?.drawImage(canvas, 0, 0);
 
       canvas.width = CANVAS_WIDTH;
       canvas.height = CANVAS_HEIGHT;
 
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.drawImage(tempCanvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     };
 
     resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
   // Only run on mount; canvasBg changes handled by initCanvas
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -144,60 +146,85 @@ export default function DrawingPage({
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
-    const pos = getCanvasPos(e);
-    if (!pos) return;
-    setIsDrawing(true);
-    lastPos.current = pos;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.beginPath();
-    ctx.arc(pos.x, pos.y, (isEraser ? brushSize * 2 : brushSize) / 2, 0, Math.PI * 2);
-    ctx.fillStyle = isEraser ? 'transparent' : color;
-    if (!isEraser) ctx.fill();
-    else {
-      ctx.clearRect(pos.x - brushSize, pos.y - brushSize, brushSize * 2, brushSize * 2);
+
+    if (moveMode) {
+      const container = containerRef.current;
+      if (!container) return;
+      lastScrollPos.current = { x: e.clientX, y: e.clientY };
+    } else {
+      const pos = getCanvasPos(e);
+      if (!pos) return;
+      setIsDrawing(true);
+      lastPos.current = pos;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, (isEraser ? brushSize * 2 : brushSize) / 2, 0, Math.PI * 2);
+      ctx.fillStyle = isEraser ? "transparent" : color;
+      if (!isEraser) ctx.fill();
+      else {
+        ctx.clearRect(pos.x - brushSize, pos.y - brushSize, brushSize * 2, brushSize * 2);
+      }
     }
-  }, [getCanvasPos, color, brushSize, isEraser]);
+  }, [getCanvasPos, color, brushSize, isEraser, moveMode]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    if (!isDrawing) return;
-    const pos = getCanvasPos(e);
-    if (!pos || !lastPos.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.beginPath();
-    ctx.moveTo(lastPos.current.x, lastPos.current.y);
-    ctx.lineTo(pos.x, pos.y);
-    if (isEraser) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-      ctx.lineWidth = brushSize * 2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-      ctx.restore();
+
+    if (moveMode) {
+      const container = containerRef.current;
+      if (!container || !lastScrollPos.current) return;
+
+      const dx = e.clientX - lastScrollPos.current.x;
+      const dy = e.clientY - lastScrollPos.current.y;
+
+      container.scrollLeft -= dx;
+      container.scrollTop -= dy;
+
+      lastScrollPos.current = { x: e.clientX, y: e.clientY };
+    } else {
+      if (!isDrawing) return;
+      const pos = getCanvasPos(e);
+      if (!pos || !lastPos.current) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.beginPath();
+      ctx.moveTo(lastPos.current.x, lastPos.current.y);
+      ctx.lineTo(pos.x, pos.y);
+      if (isEraser) {
+        ctx.save();
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.strokeStyle = "rgba(0,0,0,1)";
+        ctx.lineWidth = brushSize * 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+        ctx.restore();
+      }
+      else {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = brushSize;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+      }
+      lastPos.current = pos;
     }
-    else {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = brushSize;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-    }
-    lastPos.current = pos;
-  }, [isDrawing, getCanvasPos, color, brushSize, isEraser]);
+  }, [isDrawing, getCanvasPos, color, brushSize, isEraser, moveMode]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    setIsDrawing(false);
-    lastPos.current = null;
-  }, []);
+    if (moveMode) {
+      lastScrollPos.current = null;
+    } else {
+      setIsDrawing(false);
+      lastPos.current = null;
+    }
+  }, [moveMode]);
 
   const handleClear = () => {
     const canvas = canvasRef.current;
@@ -371,13 +398,23 @@ export default function DrawingPage({
 
             {/* Eraser */}
             <button
-              onClick={() => setIsEraser(e => !e)}
+              onClick={() => { setIsEraser(e => !e); setMoveMode(false); }}
               className={`w-full flex items-center gap-2 py-2 px-3 rounded-xl text-sm font-medium transition-colors ${
                 isEraser ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-slate-700/60 text-slate-300 border border-slate-600/30'
               }`}
             >
               <Eraser size={16} />
               橡皮擦 {isEraser ? '(使用中)' : ''}
+            </button>
+            {/* Move Mode */}
+            <button
+              onClick={() => { setMoveMode(m => !m); setIsEraser(false); setIsDrawing(false); }}
+              className={`w-full mt-2 flex items-center gap-2 py-2 px-3 rounded-xl text-sm font-medium transition-colors ${
+                moveMode ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-slate-700/60 text-slate-300 border border-slate-600/30'
+              }`}
+            >
+              <Flag size={16} />
+              移動畫布 {moveMode ? '(使用中)' : ''}
             </button>
           </div>
         )}
