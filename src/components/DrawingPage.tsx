@@ -66,6 +66,7 @@ export default function DrawingPage({
   const [moveMode, setMoveMode] = useState(false); // 新增 moveMode 狀態
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const lastScrollPos = useRef<{ x: number; y: number } | null>(null); // 新增 lastScrollPos ref
+  const cameraRef = useRef(new Camera(0, 0, 1));
 
   const timeOfDay = getTimeOfDay(round);
   const canvasBg = getCanvasBgColor(map, timeOfDay);
