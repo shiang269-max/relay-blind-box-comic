@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Palette, Minus, Plus, Eraser, Check, X, Flag } from 'lucide-react';
 import { getTimeOfDay } from '../lib/gameTypes';
+import { Camera } from "../engine/Camera";
 import type { MapType, TimeOfDay } from '../lib/gameTypes';
 
 const CANVAS_WIDTH = 3000;
