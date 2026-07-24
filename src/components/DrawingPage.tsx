@@ -324,9 +324,10 @@ export default function DrawingPage({
       </div>
 
       {/* Canvas — fills everything below header */}
-      <div ref={containerRef} className="flex-1 relative overflow-hidden">
-        <div
-          className="relative overflow-scroll w-full h-full"
+      <div className="flex-1 relative overflow-hidden">
+    <div
+        ref={containerRef}
+        className="relative overflow-scroll w-full h-full"
           style={{
             width: '100%',
             height: '100%',
