@@ -188,6 +188,9 @@ export default function DrawingPage({
       container.scrollLeft -= dx;
       container.scrollTop -= dy;
 
+      cameraRef.current.x = container.scrollLeft;
+      cameraRef.current.y = container.scrollTop;
+
       lastScrollPos.current = { x: e.clientX, y: e.clientY };
     } else {
       if (!isDrawing) return;
