@@ -126,6 +126,9 @@ export default function DrawingPage({
     if (container) {
       container.scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
       container.scrollTop = (container.scrollHeight - container.clientHeight) / 2;
+
+      cameraRef.current.x = container.scrollLeft;
+      cameraRef.current.y = container.scrollTop;
     }
   }, []); // Empty dependency array ensures this runs only once on mount
 
