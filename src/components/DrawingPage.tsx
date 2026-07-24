@@ -123,13 +123,24 @@ export default function DrawingPage({
   // Scroll to center on initial load
   useEffect(() => {
     const container = containerRef.current;
-    if (container) {
-      container.scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
-      container.scrollTop = (container.scrollHeight - container.clientHeight) / 2;
+    if (!container) return;
 
+    const handleScroll = () => {
       cameraRef.current.x = container.scrollLeft;
       cameraRef.current.y = container.scrollTop;
-    }
+    };
+
+    container.addEventListener("scroll", handleScroll);
+
+    // Initial positioning
+    container.scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
+    container.scrollTop = (container.scrollHeight - container.clientHeight) / 2;
+    cameraRef.current.x = container.scrollLeft;
+    cameraRef.current.y = container.scrollTop;
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
   }, []); // Empty dependency array ensures this runs only once on mount
 
   // On mount: restore previous snapshot so strokes accumulate across rounds
