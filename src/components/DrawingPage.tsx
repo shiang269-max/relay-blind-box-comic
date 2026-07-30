@@ -148,50 +148,7 @@ const [zoom, setZoom] = useState(1);
   if (!container) return;
 
   const handleWheel = (e: WheelEvent) => {
-    if (!e.ctrlKey) return;
-
-    e.preventDefault();
-
-    setZoom((z) => {
-  const next =
-    e.deltaY < 0
-      ? Math.min(z + 0.1, 3)
-      : Math.max(z - 0.1, 0.2);
-
-      const container = containerRef.current;
-if (!container) return next;
-
-const oldZoom = z;
-const ratio = next / oldZoom;
-
-const mouseX = e.clientX - container.getBoundingClientRect().left;
-const mouseY = e.clientY - container.getBoundingClientRect().top;
-
-const worldX = (container.scrollLeft + mouseX) / oldZoom;
-const worldY = (container.scrollTop + mouseY) / oldZoom;
-
-requestAnimationFrame(() => {
-  const maxScrollLeft =
-    CANVAS_WIDTH * next - container.clientWidth;
-
-  const maxScrollTop =
-    CANVAS_HEIGHT * next - container.clientHeight;
-
-  container.scrollLeft = Math.max(
-    0,
-    Math.min(worldX * next - mouseX, maxScrollLeft)
-  );
-
-  container.scrollTop = Math.max(
-    0,
-    Math.min(worldY * next - mouseY, maxScrollTop)
-  );
-});
-
-  cameraRef.current.scale = next;
-
-  return next;
-});
+    cameraControllerRef.current.handleZoom(e, setZoom);
   };
 
   container.addEventListener("wheel", handleWheel, { passive: false });
