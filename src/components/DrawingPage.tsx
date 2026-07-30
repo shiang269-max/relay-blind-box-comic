@@ -205,19 +205,7 @@ const [zoom, setZoom] = useState(1);
     e.preventDefault();
 
     if (moveMode) {
-      const container = containerRef.current;
-      if (!container || !lastScrollPos.current) return;
-
-      const dx = e.clientX - lastScrollPos.current.x;
-      const dy = e.clientY - lastScrollPos.current.y;
-
-      container.scrollLeft -= dx;
-      container.scrollTop -= dy;
-
-      cameraRef.current.x = container.scrollLeft;
-      cameraRef.current.y = container.scrollTop;
-
-      lastScrollPos.current = { x: e.clientX, y: e.clientY };
+      cameraControllerRef.current.handleMoveMode(e, lastScrollPos);
     } else {
       if (!isDrawing) return;
       const pos = getCanvasPos(e);
