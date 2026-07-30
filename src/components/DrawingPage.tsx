@@ -179,9 +179,7 @@ const [zoom, setZoom] = useState(1);
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
 
     if (moveMode) {
-      const container = containerRef.current;
-      if (!container) return;
-      lastScrollPos.current = { x: e.clientX, y: e.clientY };
+      cameraControllerRef.current.startMoveMode(e, lastScrollPos);
     } else {
       const pos = getCanvasPos(e);
       if (!pos) return;
@@ -241,7 +239,7 @@ const [zoom, setZoom] = useState(1);
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     if (moveMode) {
-      lastScrollPos.current = null;
+      cameraControllerRef.current.endMoveMode(lastScrollPos);
     } else {
       setIsDrawing(false);
       lastPos.current = null;
