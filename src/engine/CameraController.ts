@@ -69,6 +69,21 @@ export class CameraController {
     });
   }
 
+  public startMoveMode(
+    e: React.PointerEvent<HTMLCanvasElement>,
+    lastScrollPos: React.MutableRefObject<{ x: number; y: number } | null>
+  ) {
+    if (!this.container) return;
+
+    lastScrollPos.current = { x: e.clientX, y: e.clientY };
+  }
+
+  public endMoveMode(
+    lastScrollPos: React.MutableRefObject<{ x: number; y: number } | null>
+  ) {
+    lastScrollPos.current = null;
+  }
+
   public handleMoveMode(e: React.PointerEvent<HTMLCanvasElement>, lastScrollPos: React.MutableRefObject<{ x: number; y: number } | null>) {
     if (!this.container || !lastScrollPos.current) return;
 
