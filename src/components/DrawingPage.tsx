@@ -68,6 +68,7 @@ export default function DrawingPage({
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const lastScrollPos = useRef<{ x: number; y: number } | null>(null); // 新增 lastScrollPos ref
   const cameraRef = useRef(new Camera(0, 0, 1));
+  const cameraControllerRef = useRef(new CameraController(cameraRef.current, CANVAS_WIDTH, CANVAS_HEIGHT));
 const [zoom, setZoom] = useState(1);
 
   const timeOfDay = getTimeOfDay(round);
@@ -124,21 +125,19 @@ const [zoom, setZoom] = useState(1);
 
   // Scroll to center on initial load
   useEffect(() => {
+    const controller = cameraControllerRef.current;
+    controller.setContainer(containerRef.current);
     const container = containerRef.current;
     if (!container) return;
 
     const handleScroll = () => {
-      cameraRef.current.x = container.scrollLeft;
-      cameraRef.current.y = container.scrollTop;
+      controller.handleScroll();
     };
 
     container.addEventListener("scroll", handleScroll);
 
     // Initial positioning
-    container.scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
-    container.scrollTop = (container.scrollHeight - container.clientHeight) / 2;
-    cameraRef.current.x = container.scrollLeft;
-    cameraRef.current.y = container.scrollTop;
+    controller.initializeCameraPosition();
 
     return () => {
       container.removeEventListener("scroll", handleScroll);
