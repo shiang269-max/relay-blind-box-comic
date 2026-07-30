@@ -67,6 +67,7 @@ export default function DrawingPage({
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const lastScrollPos = useRef<{ x: number; y: number } | null>(null); // 新增 lastScrollPos ref
   const cameraRef = useRef(new Camera(0, 0, 1));
+const [zoom, setZoom] = useState(1);
 
   const timeOfDay = getTimeOfDay(round);
   const canvasBg = getCanvasBgColor(map, timeOfDay);
@@ -142,6 +143,63 @@ export default function DrawingPage({
       container.removeEventListener("scroll", handleScroll);
     };
   }, []); // Empty dependency array ensures this runs only once on mount
+  useEffect(() => {
+  const container = containerRef.current;
+  if (!container) return;
+
+  const handleWheel = (e: WheelEvent) => {
+    if (!e.ctrlKey) return;
+
+    e.preventDefault();
+
+    setZoom((z) => {
+  const next =
+    e.deltaY < 0
+      ? Math.min(z + 0.1, 3)
+      : Math.max(z - 0.1, 0.2);
+
+      const container = containerRef.current;
+if (!container) return next;
+
+const oldZoom = z;
+const ratio = next / oldZoom;
+
+const mouseX = e.clientX - container.getBoundingClientRect().left;
+const mouseY = e.clientY - container.getBoundingClientRect().top;
+
+const worldX = (container.scrollLeft + mouseX) / oldZoom;
+const worldY = (container.scrollTop + mouseY) / oldZoom;
+
+requestAnimationFrame(() => {
+  const maxScrollLeft =
+    CANVAS_WIDTH * next - container.clientWidth;
+
+  const maxScrollTop =
+    CANVAS_HEIGHT * next - container.clientHeight;
+
+  container.scrollLeft = Math.max(
+    0,
+    Math.min(worldX * next - mouseX, maxScrollLeft)
+  );
+
+  container.scrollTop = Math.max(
+    0,
+    Math.min(worldY * next - mouseY, maxScrollTop)
+  );
+});
+
+  cameraRef.current.scale = next;
+
+  return next;
+});
+  };
+
+  container.addEventListener("wheel", handleWheel, { passive: false });
+
+  return () => {
+    container.removeEventListener("wheel", handleWheel);
+  };
+}, []);
 
   // On mount: restore previous snapshot so strokes accumulate across rounds
   useEffect(() => {
@@ -336,10 +394,12 @@ export default function DrawingPage({
         >
           <div
             style={{
-              width: CANVAS_WIDTH,
-              height: CANVAS_HEIGHT,
-              position: 'relative',
-            }}
+  width: CANVAS_WIDTH,
+  height: CANVAS_HEIGHT,
+  position: "relative",
+  transform: `scale(${zoom})`,
+  transformOrigin: "top left",
+}}
           >
             <canvas
               ref={canvasRef}
