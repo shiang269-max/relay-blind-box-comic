@@ -2,7 +2,7 @@ export class Camera {
   constructor(
     public x = 0,
     public y = 0,
-    public scale = 1
+    public zoom = 1
   ) {}
 
   setPosition(x: number, y: number) {
@@ -15,7 +15,7 @@ export class Camera {
     this.y += dy;
   }
 
-  zoom(scale: number) {
-    this.scale = scale;
+  setZoom(zoom: number) {
+    this.zoom = zoom;
   }
 }
