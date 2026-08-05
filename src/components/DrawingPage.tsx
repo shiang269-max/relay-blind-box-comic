@@ -3,6 +3,7 @@ import { Palette, Minus, Plus, Eraser, Check, X, Flag } from 'lucide-react';
 import { getTimeOfDay } from '../lib/gameTypes';
 import { Camera } from "../engine/Camera";
 import { CameraController } from "../engine/CameraController";
+import { Coordinate } from "../engine/Coordinate";
 import type { MapType, TimeOfDay } from '../lib/gameTypes';
 
 const CANVAS_WIDTH = 3000;
@@ -76,16 +77,23 @@ const [zoom, setZoom] = useState(1);
   const headerColors = getHeaderColors(map, timeOfDay);
 
   const getCanvasPos = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
-    };
-  }, []);
+  const canvas = canvasRef.current;
+  if (!canvas) return null;
+
+  const rect = canvas.getBoundingClientRect();
+
+  const screen = {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
+  };
+
+  return Coordinate.screenToCanvas(
+    screen,
+    rect,
+    canvas.width,
+    canvas.height
+  );
+}, []);
 
   const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
