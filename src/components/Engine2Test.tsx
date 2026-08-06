@@ -6,27 +6,24 @@ import { Renderer } from "../engine2/Renderer";
 
 export default function Engine2Test() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const engineRef = useRef<DrawingEngine | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-
     if (!canvas) return;
 
     const context = canvas.getContext("2d");
-
     if (!context) return;
 
     const camera = new Camera();
     const renderer = new Renderer(context);
     const pointer = new Pointer();
 
-    const engine = new DrawingEngine(
+    engineRef.current = new DrawingEngine(
       camera,
       renderer,
       pointer
     );
-
-    void engine;
   }, []);
 
   return (
@@ -35,7 +32,7 @@ export default function Engine2Test() {
       width={1000}
       height={1000}
       style={{
-        border: "1px solid #ccc"
+        border: "1px solid #ccc",
       }}
     />
   );
