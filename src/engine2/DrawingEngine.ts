@@ -1,6 +1,7 @@
 import { Camera } from "./Camera";
 import { Renderer } from "./Renderer";
 import { Pointer } from "./Pointer";
+import { Point } from "./Coordinate";
 
 export class DrawingEngine {
   constructor(
@@ -11,19 +12,27 @@ export class DrawingEngine {
 
   // ===== Drawing =====
 
-  startDrawing(): void {}
+  startDrawing(point: Point): void {}
 
-  draw(): void {}
+  draw(
+    point: Point,
+    color: string,
+    size: number,
+    isEraser: boolean
+  ): void {}
 
   endDrawing(): void {}
 
-  clear(): void {}
+  clear(
+    width: number,
+    height: number
+  ): void {}
 
   // ===== Camera =====
 
-  setZoom(_zoom: number): void {}
-
-  moveCamera(_dx: number, _dy: number): void {}
+  getCamera(): Camera {
+    return this.camera;
+  }
 
   // ===== State =====
 
