@@ -4,6 +4,9 @@ import { Pointer } from "./Pointer";
 import { Point } from "./Coordinate";
 
 export class DrawingEngine {
+  private isDrawing = false;
+  private lastPoint: Point | null = null;
+
   constructor(
     private readonly camera: Camera,
     private readonly renderer: Renderer,
@@ -12,21 +15,44 @@ export class DrawingEngine {
 
   // ===== Drawing =====
 
-  startDrawing(point: Point): void {}
+  startDrawing(point: Point): void {
+    this.isDrawing = true;
+    this.lastPoint = point;
+  }
 
   draw(
     point: Point,
     color: string,
     size: number,
     isEraser: boolean
-  ): void {}
+  ): void {
+    if (!this.isDrawing || this.lastPoint === null) {
+      return;
+    }
 
-  endDrawing(): void {}
+    if (isEraser) {
+      this.renderer.erase(this.lastPoint, point, size);
+    } else {
+      this.renderer.beginPath();
+      this.renderer.moveTo(this.lastPoint);
+      this.renderer.lineTo(point);
+      this.renderer.stroke(color, size);
+    }
+
+    this.lastPoint = point;
+  }
+
+  endDrawing(): void {
+    this.isDrawing = false;
+    this.lastPoint = null;
+  }
 
   clear(
     width: number,
     height: number
-  ): void {}
+  ): void {
+    this.renderer.clear(width, height);
+  }
 
   // ===== Camera =====
 
@@ -36,5 +62,9 @@ export class DrawingEngine {
 
   // ===== State =====
 
-  reset(): void {}
+  reset(): void {
+    this.isDrawing = false;
+    this.lastPoint = null;
+    this.camera.reset();
+  }
 }
