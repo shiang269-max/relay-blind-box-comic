@@ -6,7 +6,6 @@ import { Renderer } from "../engine2/Renderer";
 
 export default function Engine2Test() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const engineRef = useRef<DrawingEngine | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -19,10 +18,13 @@ export default function Engine2Test() {
     const renderer = new Renderer(context);
     const pointer = new Pointer();
 
-    engineRef.current = new DrawingEngine(
-      camera,
-      renderer,
-      pointer
+    new DrawingEngine(camera, renderer, pointer);
+
+    // 測試 Renderer
+    renderer.drawDot(
+      { x: 200, y: 200 },
+      20,
+      "red"
     );
   }, []);
 
