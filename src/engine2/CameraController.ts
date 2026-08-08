@@ -1,22 +1,23 @@
 import { Camera } from "./Camera";
-import { Point } from "./Coordinate";
 
 export class CameraController {
   constructor(
     private readonly camera: Camera
   ) {}
 
-  pan(delta: Point): void {
-    this.camera.move(
-      delta.x,
-      delta.y
-    );
+  pan(
+    dx: number,
+    dy: number
+  ): void {
+    this.camera.move(dx, dy);
   }
 
   zoom(
-    zoom: number
+    factor: number
   ): void {
-    this.camera.setZoom(zoom);
+    this.camera.setZoom(
+      this.camera.zoom * factor
+    );
   }
 
   reset(): void {

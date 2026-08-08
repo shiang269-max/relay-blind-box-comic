@@ -8,6 +8,7 @@ import { Renderer } from "../engine2/Renderer";
 export default function Engine2Test() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<DrawingEngine | null>(null);
+  const controllerRef = useRef<CameraController | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -17,10 +18,10 @@ export default function Engine2Test() {
     if (!ctx) return;
 
     const camera = new Camera();
+    controllerRef.current = new CameraController(camera);
+
     const renderer = new Renderer(ctx);
     const pointer = new Pointer();
-
-    new CameraController(camera);
 
     engineRef.current = new DrawingEngine(
       camera,
@@ -29,7 +30,11 @@ export default function Engine2Test() {
     );
   }, []);
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerDown = (
+    e: React.PointerEvent<HTMLCanvasElement>
+  ) => {
+    console.log("pointer down");
+
     if (!canvasRef.current || !engineRef.current) return;
 
     const point = Pointer.getCanvasPosition(
@@ -40,7 +45,9 @@ export default function Engine2Test() {
     engineRef.current.startDrawing(point);
   };
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = (
+    e: React.PointerEvent<HTMLCanvasElement>
+  ) => {
     if (!canvasRef.current || !engineRef.current) return;
 
     const point = Pointer.getCanvasPosition(
@@ -60,6 +67,27 @@ export default function Engine2Test() {
     engineRef.current?.endDrawing();
   };
 
+  const handleWheel = (
+    e: React.WheelEvent<HTMLCanvasElement>
+  ) => {
+    e.preventDefault();
+
+    console.log("wheel", e.deltaY);
+
+    if (!controllerRef.current) return;
+
+    if (e.deltaY < 0) {
+      controllerRef.current.zoom(1.1);
+    } else {
+      controllerRef.current.zoom(0.9);
+    }
+
+    console.log(
+      "zoom value",
+      controllerRef.current.getCamera().zoom
+    );
+  };
+
   return (
     <canvas
       ref={canvasRef}
@@ -69,6 +97,7 @@ export default function Engine2Test() {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
+      onWheel={handleWheel}
       style={{
         border: "1px solid #ccc",
         touchAction: "none",
