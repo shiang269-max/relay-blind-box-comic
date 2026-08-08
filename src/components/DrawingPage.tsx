@@ -1,10 +1,19 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Palette, Minus, Plus, Eraser, Check, X, Flag } from 'lucide-react';
-import { getTimeOfDay } from '../lib/gameTypes';
+import React, { useRef, useState, useEffect, useCallback } from "react";
+import { Palette, Minus, Plus, Eraser, Check, X, Flag } from "lucide-react";
+import { getTimeOfDay } from "../lib/gameTypes";
+
+// 舊 Engine
 import { Camera } from "../engine/Camera";
 import { CameraController } from "../engine/CameraController";
 import { Coordinate } from "../engine/Coordinate";
-import type { MapType, TimeOfDay } from '../lib/gameTypes';
+
+// 新 Engine2
+import { DrawingEngine } from "../engine2/DrawingEngine";
+import { Renderer } from "../engine2/Renderer";
+import { Pointer } from "../engine2/Pointer";
+import { Camera as Engine2Camera } from "../engine2/Camera";
+
+import type { MapType, TimeOfDay } from "../lib/gameTypes";
 
 const CANVAS_WIDTH = 3000;
 const CANVAS_HEIGHT = 5000;
@@ -59,6 +68,10 @@ export default function DrawingPage({
 }: DrawingPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const drawingEngineRef = useRef<DrawingEngine | null>(null);
+const rendererRef = useRef<Renderer | null>(null);
+const camera2Ref = useRef<Engine2Camera | null>(null);
+const pointerRef = useRef<Pointer | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(6);
@@ -96,74 +109,68 @@ const [zoom, setZoom] = useState(1);
 }, []);
 
   const initCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    // Clear to transparent — CSS background-color provides the time-of-day color
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }, []);
+  const canvas = canvasRef.current;
+  if (!canvas) return;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const camera = new Engine2Camera();
+  const renderer = new Renderer(ctx);
+  const pointer = new Pointer();
+
+  camera2Ref.current = camera;
+  rendererRef.current = renderer;
+  pointerRef.current = pointer;
+
+  drawingEngineRef.current = new DrawingEngine(
+    camera,
+    renderer,
+    pointer
+  );
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}, []);
 
   // Resize canvas to fill container
-  useEffect(() => {
-    const resize = () => {
-      const container = containerRef.current;
-      const canvas = canvasRef.current;
-      if (!container || !canvas) return;
-      // Save existing drawing
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
-      tempCanvas.getContext("2d")?.drawImage(canvas, 0, 0);
-
-      canvas.width = CANVAS_WIDTH;
-      canvas.height = CANVAS_HEIGHT;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.drawImage(tempCanvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  // Only run on mount; canvasBg changes handled by initCanvas
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Scroll to center on initial load
-  useEffect(() => {
-    const controller = cameraControllerRef.current;
-    controller.setContainer(containerRef.current);
+  // Resize canvas to fill container
+// Resize canvas to fill container
+useEffect(() => {
+  const resize = () => {
     const container = containerRef.current;
-    if (!container) return;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
 
-    const handleScroll = () => {
-      controller.handleScroll();
-    };
+    // Save existing drawing
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    tempCanvas.getContext("2d")?.drawImage(canvas, 0, 0);
 
-    container.addEventListener("scroll", handleScroll);
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
 
-    // Initial positioning
-    controller.initializeCameraPosition();
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-    return () => {
-      container.removeEventListener("scroll", handleScroll);
-    };
-  }, []); // Empty dependency array ensures this runs only once on mount
-  useEffect(() => {
-  const container = containerRef.current;
-  if (!container) return;
-
-  const handleWheel = (e: WheelEvent) => {
-    cameraControllerRef.current.handleZoom(e, setZoom);
+    ctx.drawImage(
+      tempCanvas,
+      0,
+      0,
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT
+    );
   };
 
-  container.addEventListener("wheel", handleWheel, { passive: false });
+  resize();
+  initCanvas();
+
+  window.addEventListener("resize", resize);
 
   return () => {
-    container.removeEventListener("wheel", handleWheel);
+    window.removeEventListener("resize", resize);
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
   // On mount: restore previous snapshot so strokes accumulate across rounds
@@ -258,10 +265,10 @@ const [zoom, setZoom] = useState(1);
   const canvas = canvasRef.current;
   if (!canvas) return;
 
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawingEngineRef.current?.clear(
+    canvas.width,
+    canvas.height
+  );
 };
 
   const handleSubmit = () => {
