@@ -185,8 +185,11 @@ useEffect(() => {
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
 
     if (moveMode) {
-      cameraControllerRef.current.startMoveMode(e, lastScrollPos);
-    } else {
+    cameraControllerRef.current.startMoveMode(
+        e.nativeEvent,
+        lastScrollPos
+    );
+} else {
       const pos = getCanvasPos(e);
 if (!pos) return;
 
@@ -201,7 +204,10 @@ drawingEngineRef.current?.startDrawing(pos);
     e.preventDefault();
 
     if (moveMode) {
-      cameraControllerRef.current.handleMoveMode(e, lastScrollPos);
+      cameraControllerRef.current.handleMoveMode(
+    e.nativeEvent,
+    lastScrollPos
+);
     } else {
       if (!isDrawing) return;
       const pos = getCanvasPos(e);
