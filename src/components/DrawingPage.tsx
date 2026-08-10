@@ -209,35 +209,20 @@ drawingEngineRef.current?.startDrawing(pos);
     lastScrollPos
 );
     } else {
-      if (!isDrawing) return;
-      const pos = getCanvasPos(e);
-      if (!pos || !lastPos.current) return;
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.beginPath();
-      ctx.moveTo(lastPos.current.x, lastPos.current.y);
-      ctx.lineTo(pos.x, pos.y);
-      if (isEraser) {
-        ctx.save();
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.strokeStyle = "rgba(0,0,0,1)";
-        ctx.lineWidth = brushSize * 2;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
-        ctx.restore();
-      }
-      else {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = brushSize;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
-      }
-      lastPos.current = pos;
-    }
+  if (!isDrawing) return;
+
+  const pos = getCanvasPos(e);
+  if (!pos || !lastPos.current) return;
+
+  drawingEngineRef.current?.draw(
+    pos,
+    color,
+    brushSize,
+    isEraser
+  );
+
+  lastPos.current = pos;
+}
   }, [isDrawing, getCanvasPos, color, brushSize, isEraser, moveMode]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
