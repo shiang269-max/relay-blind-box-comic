@@ -89,22 +89,13 @@ const [zoom, setZoom] = useState(1);
   const canvasBg = getCanvasBgColor(map, timeOfDay);
   const headerColors = getHeaderColors(map, timeOfDay);
 
-  const getCanvasPos = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+  const getCanvasPos = useCallback((e: React.PointerEvent) => {
   const canvas = canvasRef.current;
   if (!canvas) return null;
 
-  const rect = canvas.getBoundingClientRect();
-
-  const screen = {
-    x: e.clientX - rect.left,
-    y: e.clientY - rect.top,
-  };
-
-  return Coordinate.screenToCanvas(
-    screen,
-    rect,
-    canvas.width,
-    canvas.height
+  return Pointer.getCanvasPosition(
+    e.nativeEvent,
+    canvas
   );
 }, []);
 
