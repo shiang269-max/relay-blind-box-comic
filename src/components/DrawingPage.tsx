@@ -197,20 +197,12 @@ useEffect(() => {
       cameraControllerRef.current.startMoveMode(e, lastScrollPos);
     } else {
       const pos = getCanvasPos(e);
-      if (!pos) return;
-      setIsDrawing(true);
-      lastPos.current = pos;
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, (isEraser ? brushSize * 2 : brushSize) / 2, 0, Math.PI * 2);
-      ctx.fillStyle = isEraser ? "transparent" : color;
-      if (!isEraser) ctx.fill();
-      else {
-        ctx.clearRect(pos.x - brushSize, pos.y - brushSize, brushSize * 2, brushSize * 2);
-      }
+if (!pos) return;
+
+setIsDrawing(true);
+lastPos.current = pos;
+
+drawingEngineRef.current?.startDrawing(pos);
     }
   }, [getCanvasPos, color, brushSize, isEraser, moveMode]);
 
@@ -256,9 +248,11 @@ useEffect(() => {
     if (moveMode) {
       cameraControllerRef.current.endMoveMode(lastScrollPos);
     } else {
-      setIsDrawing(false);
-      lastPos.current = null;
-    }
+  drawingEngineRef.current?.endDrawing();
+
+  setIsDrawing(false);
+  lastPos.current = null;
+}
   }, [moveMode]);
 
   const handleClear = () => {
