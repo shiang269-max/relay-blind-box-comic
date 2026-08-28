@@ -7,6 +7,7 @@ import {
   WORLD_WIDTH,
   type MapType,
 } from "./domain";
+import type { GameMode } from "./game/GameMode";
 import { DrawingSurface, type Brush } from "./drawing/DrawingSurface";
 
 const COLORS = [
@@ -15,8 +16,8 @@ const COLORS = [
 ];
 
 interface DrawingScreenProps {
+  mode: GameMode;
   round: number;
-  totalRounds: number;
   map: MapType;
   playerName: string;
   previousPage: string | null;
@@ -24,8 +25,8 @@ interface DrawingScreenProps {
 }
 
 export default function DrawingScreen({
+  mode,
   round,
-  totalRounds,
   map,
   playerName,
   previousPage,
@@ -48,11 +49,7 @@ export default function DrawingScreen({
   const time = getTimeOfDay(round);
   const background = getBackgroundColor(map, time);
 
-  const brush = useCallback((): Brush => ({
-    color,
-    size,
-    eraser,
-  }), [color, size, eraser]);
+  const brush = useCallback((): Brush => ({ color, size, eraser }), [color, size, eraser]);
 
   const resize = useCallback(() => {
     const element = containerRef.current;
@@ -113,9 +110,7 @@ export default function DrawingScreen({
     }
 
     const world = surface.eventToWorld(event.nativeEvent);
-    if (surface.startStroke(world, brush())) {
-      setDrawing(true);
-    }
+    if (surface.startStroke(world, brush())) setDrawing(true);
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -134,10 +129,7 @@ export default function DrawingScreen({
       if (next && previous) {
         const factor = next / previous;
         const points = [...activePointers.current.values()];
-        surface.camera.zoomAt(
-          { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 },
-          factor
-        );
+        surface.camera.zoomAt({ x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 }, factor);
         surface.render();
       }
       pinchDistance.current = next;
@@ -146,10 +138,7 @@ export default function DrawingScreen({
 
     if (moveMode) {
       if (panPoint.current) {
-        surface.camera.panByScreen(
-          screen.x - panPoint.current.x,
-          screen.y - panPoint.current.y
-        );
+        surface.camera.panByScreen(screen.x - panPoint.current.x, screen.y - panPoint.current.y);
         panPoint.current = screen;
         surface.render();
       }
@@ -162,14 +151,10 @@ export default function DrawingScreen({
 
   const finishPointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget;
-    if (canvas.hasPointerCapture(event.pointerId)) {
-      canvas.releasePointerCapture(event.pointerId);
-    }
-
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     activePointers.current.delete(event.pointerId);
     if (activePointers.current.size < 2) pinchDistance.current = null;
     if (activePointers.current.size === 0) panPoint.current = null;
-
     surfaceRef.current?.endStroke();
     setDrawing(false);
   };
@@ -179,18 +164,8 @@ export default function DrawingScreen({
     const surface = surfaceRef.current;
     if (!surface) return;
     const screen = surface.eventToScreen(event.nativeEvent);
-    const factor = Math.exp(-event.deltaY * 0.0015);
-    surface.camera.zoomAt(screen, factor);
+    surface.camera.zoomAt(screen, Math.exp(-event.deltaY * 0.0015));
     surface.render();
-  };
-
-  const handleClear = () => {
-    surfaceRef.current?.clear();
-  };
-
-  const handleResetView = () => {
-    surfaceRef.current?.camera.reset();
-    surfaceRef.current?.render();
   };
 
   const handleSubmit = async () => {
@@ -204,17 +179,25 @@ export default function DrawingScreen({
     }
   };
 
+  const progress = mode.totalRounds === null
+    ? null
+    : Math.min(100, (round / mode.totalRounds) * 100);
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ background }}>
       <header className="flex shrink-0 items-center gap-3 bg-black/30 px-3 py-2 text-white backdrop-blur">
         <div className="min-w-0">
           <div className="truncate text-sm font-bold">{playerName} 的回合</div>
-          <div className="text-xs text-white/70">第 {round}/{totalRounds} 頁</div>
+          <div className="text-xs text-white/70">
+            {mode.label} · {mode.totalRounds === null ? `第 ${round} 回合` : `第 ${round}/${mode.totalRounds} 頁`}
+          </div>
         </div>
-        <div className="h-1.5 flex-1 overflow-hidden rounded bg-white/20">
-          <div className="h-full rounded bg-white/80" style={{ width: `${(round / totalRounds) * 100}%` }} />
-        </div>
-        <button onClick={handleClear} className="rounded bg-white/10 px-2 py-1 text-xs">清除</button>
+        {progress !== null && (
+          <div className="h-1.5 flex-1 overflow-hidden rounded bg-white/20">
+            <div className="h-full rounded bg-white/80" style={{ width: `${progress}%` }} />
+          </div>
+        )}
+        <button onClick={() => surfaceRef.current?.clear()} className="rounded bg-white/10 px-2 py-1 text-xs">清除</button>
         <button onClick={handleSubmit} disabled={submitting} className="flex items-center gap-1 rounded bg-green-500 px-2 py-1 text-xs font-bold disabled:opacity-50">
           <Check size={14} />{submitting ? "送出中" : "送出"}
         </button>
@@ -233,16 +216,12 @@ export default function DrawingScreen({
       </main>
 
       <section className="flex shrink-0 items-center justify-center gap-2 bg-black/35 px-3 py-2 text-white backdrop-blur">
-        <button onClick={() => setMoveMode((value) => !value)} className={`rounded-full p-2 ${moveMode ? "bg-sky-500" : "bg-white/10"}`} title="移動畫面">
-          <Move size={18} />
-        </button>
-        <button onClick={() => setEraser((value) => !value)} className={`rounded-full p-2 ${eraser ? "bg-orange-500" : "bg-white/10"}`} title="橡皮擦">
-          <Eraser size={18} />
-        </button>
+        <button onClick={() => setMoveMode((value) => !value)} className={`rounded-full p-2 ${moveMode ? "bg-sky-500" : "bg-white/10"}`} title="移動畫面"><Move size={18} /></button>
+        <button onClick={() => setEraser((value) => !value)} className={`rounded-full p-2 ${eraser ? "bg-orange-500" : "bg-white/10"}`} title="橡皮擦"><Eraser size={18} /></button>
         <button onClick={() => setSize((value) => Math.max(1, value - 2))} className="rounded-full bg-white/10 p-2"><Minus size={18} /></button>
         <span className="min-w-8 text-center text-xs">{size}</span>
         <button onClick={() => setSize((value) => Math.min(100, value + 2))} className="rounded-full bg-white/10 p-2"><Plus size={18} /></button>
-        <button onClick={handleResetView} className="rounded-full bg-white/10 p-2" title="重設視角"><RotateCcw size={18} /></button>
+        <button onClick={() => { surfaceRef.current?.camera.reset(); surfaceRef.current?.render(); }} className="rounded-full bg-white/10 p-2" title="重設視角"><RotateCcw size={18} /></button>
         <Palette size={18} className="ml-1" />
         <div className="flex gap-1 overflow-x-auto">
           {COLORS.map((item) => (
