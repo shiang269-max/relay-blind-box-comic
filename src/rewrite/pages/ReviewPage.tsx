@@ -23,31 +23,47 @@ export default function ReviewPage({
   );
   const [index, setIndex] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [title, setTitle] = useState(comic.title);
   const page = pageNumbers[index];
   const round = page ?? Math.max(1, index + 1);
 
   const save = async () => {
-    if (!onSave) return;
+    if (!onSave || saving) return;
+
     setSaving(true);
+    setSaveError(null);
+
     try {
       await onSave(title);
-      alert("已保存到歷史漫畫");
+      setSaved(true);
+    } catch (reason) {
+      console.error("保存漫畫失敗", reason);
+      setSaveError("保存失敗，請確認網路後再試一次。");
     } finally {
       setSaving(false);
     }
   };
 
+  const previous = () => {
+    setIndex((value) => Math.max(0, value - 1));
+  };
+
+  const next = () => {
+    setIndex((value) => Math.min(pageNumbers.length - 1, value + 1));
+  };
+
   return (
-    <div className="relative flex min-h-[100dvh] flex-col overflow-hidden text-white">
+    <div className="relative flex min-h-[100svh] flex-col overflow-hidden text-white">
       <GameAtmosphere map={map} round={round} />
 
-      <header className="relative z-10 flex items-center justify-between border-b border-white/10 bg-slate-950/45 px-4 py-3 backdrop-blur-xl">
-        <button onClick={onBack} className="rounded-xl px-2 py-1 text-sm text-white/60 transition hover:bg-white/10 hover:text-white">
+      <header className="relative z-10 flex items-center justify-between border-b border-white/10 bg-slate-950/45 px-3 py-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl sm:px-4">
+        <button onClick={onBack} className="min-h-11 rounded-2xl px-3 text-sm text-white/65 transition active:scale-[0.98] sm:hover:bg-white/10 sm:hover:text-white">
           ← 返回
         </button>
-        <div className="text-center">
-          <strong className="block text-sm">接力盲盒漫畫</strong>
+        <div className="min-w-0 text-center">
+          <strong className="block truncate text-sm">接力盲盒漫畫</strong>
           <span className="text-[10px] font-bold tracking-[0.2em] text-white/35">
             {map === "earth" ? "EARTH RELAY" : "UNIVERSE RELAY"}
           </span>
@@ -55,23 +71,26 @@ export default function ReviewPage({
         {!readOnly ? (
           <button
             onClick={save}
-            disabled={saving}
-            className="rounded-xl border border-white/15 bg-white/10 px-3 py-1.5 text-sm font-bold transition hover:bg-white/20 disabled:opacity-40"
+            disabled={saving || saved}
+            className="min-h-11 rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-bold transition active:scale-[0.98] disabled:opacity-50 sm:hover:bg-white/20"
           >
-            {saving ? "保存中" : "保存"}
+            {saving ? "保存中" : saved ? "已保存" : "保存"}
           </button>
-        ) : <div className="w-12" />}
+        ) : <div className="w-[76px]" />}
       </header>
 
       {!readOnly && (
         <div className="relative z-10 border-b border-white/10 bg-slate-950/35 p-3 backdrop-blur-md">
           <input
             value={title}
+            disabled={saved}
             onChange={(event) => setTitle(event.target.value)}
             maxLength={30}
-            className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/25"
+            className="min-h-12 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/25 disabled:opacity-60"
             placeholder="為這部漫畫命名"
           />
+          {saved && <p className="mt-2 text-center text-xs text-emerald-200/80">這場接力已經正式封存到漫畫檔案庫。</p>}
+          {saveError && <p className="mt-2 text-center text-xs text-red-200">{saveError}</p>}
         </div>
       )}
 
@@ -93,22 +112,22 @@ export default function ReviewPage({
         </div>
       </main>
 
-      <footer className="relative z-10 flex items-center justify-between gap-3 border-t border-white/10 bg-slate-950/45 p-4 backdrop-blur-xl">
+      <footer className="relative z-10 flex items-center justify-between gap-3 border-t border-white/10 bg-slate-950/45 p-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:p-4">
         <button
           disabled={index === 0}
-          onClick={() => setIndex((value) => Math.max(0, value - 1))}
-          className="min-h-11 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm disabled:opacity-30"
+          onClick={previous}
+          className="min-h-11 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm active:scale-[0.98] disabled:opacity-30"
         >
           上一頁
         </button>
         <div className="text-center text-xs text-white/50">
           <div className="font-black text-white">{page ?? 0} / {pageNumbers.length}</div>
-          <div className="mt-1 text-[10px] tracking-[0.16em] text-white/30">SWIPE OR TAP</div>
+          <div className="mt-1 text-[10px] tracking-[0.16em] text-white/30">TAP TO EXPLORE</div>
         </div>
         <button
           disabled={index >= pageNumbers.length - 1}
-          onClick={() => setIndex((value) => Math.min(pageNumbers.length - 1, value + 1))}
-          className="min-h-11 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm disabled:opacity-30"
+          onClick={next}
+          className="min-h-11 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm active:scale-[0.98] disabled:opacity-30"
         >
           下一頁
         </button>
