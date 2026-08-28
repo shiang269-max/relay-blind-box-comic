@@ -16,6 +16,9 @@ interface RoomTarget {
   createIfMissing: boolean;
 }
 
+const PLAYER_ID_KEY = "relay_comic_player_id";
+const PLAYER_NAME_KEY = "relay_comic_player_name";
+
 function readRoomTarget(): RoomTarget {
   const fromHash = window.location.hash.replace("#", "").trim().toUpperCase();
   if (fromHash) {
@@ -26,22 +29,23 @@ function readRoomTarget(): RoomTarget {
 }
 
 function readPlayerId(): string {
-  const key = "relay_comic_player_id";
-  const existing = sessionStorage.getItem(key);
+  const existing = localStorage.getItem(PLAYER_ID_KEY);
   if (existing) return existing;
 
   const next = generatePlayerId();
-  sessionStorage.setItem(key, next);
+  localStorage.setItem(PLAYER_ID_KEY, next);
   return next;
+}
+
+function readPlayerName(): string {
+  return localStorage.getItem(PLAYER_NAME_KEY) ?? "";
 }
 
 function AppRewrite() {
   const [roomTarget, setRoomTarget] = useState<RoomTarget>(readRoomTarget);
   const { id: roomId, createIfMissing } = roomTarget;
   const [playerId] = useState(readPlayerId);
-  const [playerName, setPlayerName] = useState(
-    () => sessionStorage.getItem("relay_comic_player_name") ?? ""
-  );
+  const [playerName, setPlayerName] = useState(readPlayerName);
   const [screen, setScreen] = useState<"game" | "lobby" | "history">("game");
   const [viewingComic, setViewingComic] = useState<Comic | null>(null);
   const [viewportHeight, setViewportHeight] = useState(getSafeViewportHeight);
@@ -90,7 +94,7 @@ function AppRewrite() {
     const next = name.trim().slice(0, 12);
     if (!next) return;
 
-    sessionStorage.setItem("relay_comic_player_name", next);
+    localStorage.setItem(PLAYER_NAME_KEY, next);
     setPlayerName(next);
   }, []);
 
