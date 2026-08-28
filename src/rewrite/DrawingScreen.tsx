@@ -17,13 +17,14 @@ interface DrawingScreenProps {
   roomId: string;
   pageIndex: number;
   round: number;
+  playerCount: number;
   map: MapType;
   playerName: string;
   previousPage: string | null;
   onSubmit: (dataUrl: string) => Promise<boolean> | boolean;
 }
 
-export default function DrawingScreen({ mode, roomId, pageIndex, round, map, playerName, previousPage, onSubmit }: DrawingScreenProps) {
+export default function DrawingScreen({ mode, roomId, pageIndex, round, playerCount, map, playerName, previousPage, onSubmit }: DrawingScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<DrawingSurface | null>(null);
@@ -42,7 +43,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved">("idle");
 
-  const time = getTimeOfDay(round);
+  const time = getTimeOfDay(round, playerCount);
   const brush = useCallback((): Brush => ({ color, size, eraser }), [color, size, eraser]);
 
   const resize = useCallback(() => {
@@ -113,8 +114,10 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
 
     const initialize = async () => {
       try {
-        if (previousPage) await surface.loadImage(previousPage);
+        // 先恢復本回合自己的暫存，再載入上一回合的正式快照。
+        // replaceStrokes() 只重建目前回合的 stroke layer；base layer 永遠由上一頁正式快照管理。
         await lifecycle.initialize();
+        if (previousPage) await surface.loadImage(previousPage);
       } finally {
         if (!cancelled) setLoadingDrawing(false);
       }
@@ -186,10 +189,6 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
         setSubmitError("目前回合已經變更，作品暫存已保留，請等待最新房間狀態。");
         return;
       }
-
-      // 成功送出後不立即清除 Firebase 暫存。
-      // 下一回合已由 room/pageIndex 切換；保留上一頁快照可避免非同步切換時
-      // 因本地清除而造成「內容突然消失」的觀感，也提供送出後的恢復保護。
     } catch (error) {
       console.error("送出回合失敗", error);
       setSubmitError("送出失敗，作品暫存已保留，可以重新嘗試。");
