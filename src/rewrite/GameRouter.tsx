@@ -92,6 +92,7 @@ export default function GameRouter({
         totalRounds={mode.totalRounds}
         modeLabel={mode.label}
         currentPlayerName={currentPlayer?.name ?? "其他玩家"}
+        map={room.map}
       />
     );
   }
@@ -107,7 +108,7 @@ export default function GameRouter({
       pages: relayState.pages,
     };
 
-    return <ReviewPage comic={comic} onBack={onLeaveGame} onSave={saveComic} />;
+    return <ReviewPage comic={comic} map={room.map} onBack={onLeaveGame} onSave={saveComic} />;
   }
 
   return null;
