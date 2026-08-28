@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Eraser, Minus, Move, Palette, Plus, RotateCcw } from "lucide-react";
+import {
+  Check,
+  Eraser,
+  Minus,
+  Move,
+  Palette,
+  Plus,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import {
   getBackgroundColor,
   getTimeOfDay,
@@ -13,8 +22,16 @@ import { DrawingSurface, type Brush } from "./drawing/DrawingSurface";
 import { useDrawingInteraction } from "./drawing/useDrawingInteraction";
 
 const COLORS = [
-  "#000000", "#ffffff", "#ef4444", "#f97316", "#eab308",
-  "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6",
+  "#000000",
+  "#ffffff",
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+  "#14b8a6",
 ];
 
 interface DrawingScreenProps {
@@ -121,43 +138,54 @@ export default function DrawingScreen({
     ? null
     : Math.min(100, (round / mode.totalRounds) * 100);
 
+  const roundLabel = mode.totalRounds === null
+    ? `第 ${round} 回合`
+    : `第 ${round}/${mode.totalRounds} 頁`;
+
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden" style={{ background }}>
-      <header className="flex shrink-0 items-center gap-3 bg-black/30 px-3 py-2 text-white backdrop-blur">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-bold">{playerName} 的回合</div>
-          <div className="text-xs text-white/70">
-            {mode.label} · {mode.totalRounds === null ? `第 ${round} 回合` : `第 ${round}/${mode.totalRounds} 頁`}
+    <div
+      className="flex w-screen flex-col overflow-hidden"
+      style={{
+        height: "var(--app-height, 100svh)",
+        background,
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
+      <header className="shrink-0 border-b border-white/10 bg-black/35 px-3 py-2 text-white backdrop-blur">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-bold">{playerName} 的回合</div>
+            <div className="truncate text-xs text-white/70">
+              {mode.label} · {roundLabel}
+            </div>
           </div>
+
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-green-500 px-4 text-sm font-bold shadow disabled:opacity-50"
+          >
+            <Check size={18} />
+            {submitting ? "送出中" : "送出"}
+          </button>
         </div>
 
         {progress !== null && (
-          <div className="h-1.5 flex-1 overflow-hidden rounded bg-white/20">
-            <div className="h-full rounded bg-white/80" style={{ width: `${progress}%` }} />
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
+            <div
+              className="h-full rounded-full bg-white/80 transition-[width]"
+              style={{ width: `${progress}%` }}
+            />
           </div>
         )}
-
-        <button
-          onClick={() => sessionRef.current?.clear()}
-          className="rounded bg-white/10 px-2 py-1 text-xs"
-        >
-          清除
-        </button>
-
-        <button
-          onClick={handleSubmit}
-          disabled={submitting}
-          className="flex items-center gap-1 rounded bg-green-500 px-2 py-1 text-xs font-bold disabled:opacity-50"
-        >
-          <Check size={14} />
-          {submitting ? "送出中" : "送出"}
-        </button>
       </header>
 
       <main ref={containerRef} className="relative min-h-0 flex-1">
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 block h-full w-full touch-none"
+          className="absolute inset-0 block h-full w-full touch-none select-none"
+          style={{ touchAction: "none" }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={finishPointer}
@@ -166,67 +194,100 @@ export default function DrawingScreen({
         />
       </main>
 
-      <section className="flex shrink-0 items-center justify-center gap-2 bg-black/35 px-3 py-2 text-white backdrop-blur">
-        <button
-          onClick={() => setMoveMode((value) => !value)}
-          className={`rounded-full p-2 ${moveMode ? "bg-sky-500" : "bg-white/10"}`}
-          title="移動畫面"
-        >
-          <Move size={18} />
-        </button>
+      <section className="shrink-0 border-t border-white/10 bg-black/45 text-white backdrop-blur">
+        <div className="flex min-h-14 items-center gap-2 overflow-x-auto px-3 py-2 [-webkit-overflow-scrolling:touch]">
+          <button
+            onClick={() => {
+              setMoveMode((value) => !value);
+              setEraser(false);
+            }}
+            className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl ${
+              moveMode ? "bg-sky-500" : "bg-white/10"
+            }`}
+            title="移動畫面"
+            aria-label="移動畫面"
+          >
+            <Move size={20} />
+          </button>
 
-        <button
-          onClick={() => setEraser((value) => !value)}
-          className={`rounded-full p-2 ${eraser ? "bg-orange-500" : "bg-white/10"}`}
-          title="橡皮擦"
-        >
-          <Eraser size={18} />
-        </button>
+          <button
+            onClick={() => {
+              setEraser((value) => !value);
+              setMoveMode(false);
+            }}
+            className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl ${
+              eraser ? "bg-orange-500" : "bg-white/10"
+            }`}
+            title="橡皮擦"
+            aria-label="橡皮擦"
+          >
+            <Eraser size={20} />
+          </button>
 
-        <button
-          onClick={() => setSize((value) => Math.max(1, value - 2))}
-          className="rounded-full bg-white/10 p-2"
-        >
-          <Minus size={18} />
-        </button>
-
-        <span className="min-w-8 text-center text-xs">{size}</span>
-
-        <button
-          onClick={() => setSize((value) => Math.min(100, value + 2))}
-          className="rounded-full bg-white/10 p-2"
-        >
-          <Plus size={18} />
-        </button>
-
-        <button
-          onClick={() => {
-            surfaceRef.current?.camera.reset();
-            surfaceRef.current?.render();
-          }}
-          className="rounded-full bg-white/10 p-2"
-          title="重設視角"
-        >
-          <RotateCcw size={18} />
-        </button>
-
-        <Palette size={18} className="ml-1" />
-
-        <div className="flex gap-1 overflow-x-auto">
-          {COLORS.map((item) => (
+          <div className="flex shrink-0 items-center gap-1 rounded-xl bg-white/10 px-1">
             <button
-              key={item}
-              onClick={() => {
-                setColor(item);
-                setEraser(false);
-              }}
-              className={`h-6 w-6 shrink-0 rounded-full border-2 ${
-                color === item && !eraser ? "border-white" : "border-white/20"
-              }`}
-              style={{ backgroundColor: item }}
-              aria-label={`選擇顏色 ${item}`}
-            />
-          ))}
+              onClick={() => setSize((value) => Math.max(1, value - 2))}
+              className="flex min-h-11 min-w-10 items-center justify-center"
+              aria-label="縮小筆刷"
+            >
+              <Minus size={18} />
+            </button>
+
+            <span className="min-w-8 text-center text-xs font-bold">{size}</span>
+
+            <button
+              onClick={() => setSize((value) => Math.min(100, value + 2))}
+              className="flex min-h-11 min-w-10 items-center justify-center"
+              aria-label="放大筆刷"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+
+          <button
+            onClick={() => {
+              surfaceRef.current?.camera.reset();
+              surfaceRef.current?.render();
+            }}
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-white/10"
+            title="重設視角"
+            aria-label="重設視角"
+          >
+            <RotateCcw size={19} />
+          </button>
+
+          <button
+            onClick={() => sessionRef.current?.clear()}
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-white/10"
+            title="清除畫面"
+            aria-label="清除畫面"
+          >
+            <Trash2 size={19} />
+          </button>
+
+          <div className="h-8 w-px shrink-0 bg-white/15" />
+
+          <Palette size={19} className="shrink-0 text-white/80" />
+
+          <div className="flex shrink-0 gap-1.5 pr-1">
+            {COLORS.map((item) => (
+              <button
+                key={item}
+                onClick={() => {
+                  setColor(item);
+                  setEraser(false);
+                  setMoveMode(false);
+                }}
+                className={`h-9 w-9 shrink-0 rounded-full border-2 transition-transform active:scale-90 ${
+                  color === item && !eraser
+                    ? "border-white scale-110"
+                    : "border-white/25"
+                }`}
+                style={{ backgroundColor: item }}
+                aria-label={`選擇顏色 ${item}`}
+              />
+            ))}
+          </div>
         </div>
       </section>
     </div>
