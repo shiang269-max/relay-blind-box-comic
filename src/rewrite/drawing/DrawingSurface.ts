@@ -13,11 +13,20 @@ export interface SurfaceOptions {
   background: string;
 }
 
-/** 唯一負責畫布座標、世界像素與渲染的 Surface。 */
+/**
+ * 唯一負責畫布座標、世界像素與渲染的 Surface。
+ *
+ * baseCanvas：上一頁傳遞而來的不可修改底圖。
+ * strokeCanvas：目前玩家的可序列化筆劃。
+ *
+ * 兩層分離後，載入／還原目前玩家筆劃時不會清掉上一頁畫面。
+ */
 export class DrawingSurface {
   readonly camera: Camera;
-  private readonly worldCanvas: HTMLCanvasElement;
-  private readonly worldContext: CanvasRenderingContext2D;
+  private readonly baseCanvas: HTMLCanvasElement;
+  private readonly baseContext: CanvasRenderingContext2D;
+  private readonly strokeCanvas: HTMLCanvasElement;
+  private readonly strokeContext: CanvasRenderingContext2D;
   private readonly viewportContext: CanvasRenderingContext2D;
   private cssWidth = 1;
   private cssHeight = 1;
@@ -32,13 +41,19 @@ export class DrawingSurface {
     if (!context) throw new Error("無法建立 viewport context");
     this.viewportContext = context;
 
-    this.worldCanvas = document.createElement("canvas");
-    this.worldCanvas.width = options.worldWidth;
-    this.worldCanvas.height = options.worldHeight;
+    this.baseCanvas = document.createElement("canvas");
+    this.baseCanvas.width = options.worldWidth;
+    this.baseCanvas.height = options.worldHeight;
+    const baseContext = this.baseCanvas.getContext("2d");
+    if (!baseContext) throw new Error("無法建立 base context");
+    this.baseContext = baseContext;
 
-    const worldContext = this.worldCanvas.getContext("2d");
-    if (!worldContext) throw new Error("無法建立 world context");
-    this.worldContext = worldContext;
+    this.strokeCanvas = document.createElement("canvas");
+    this.strokeCanvas.width = options.worldWidth;
+    this.strokeCanvas.height = options.worldHeight;
+    const strokeContext = this.strokeCanvas.getContext("2d");
+    if (!strokeContext) throw new Error("無法建立 stroke context");
+    this.strokeContext = strokeContext;
 
     this.camera = new Camera({ width: options.worldWidth, height: options.worldHeight });
   }
@@ -88,13 +103,13 @@ export class DrawingSurface {
 
   clear(): void {
     this.endStroke();
-    this.worldContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
+    this.strokeContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
     this.render();
   }
 
   redraw(strokes: readonly Stroke[]): void {
     this.endStroke();
-    this.worldContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
+    this.strokeContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
     for (const stroke of strokes) this.drawStroke(stroke);
     this.render();
   }
@@ -107,9 +122,8 @@ export class DrawingSurface {
       image.onerror = () => reject(new Error("上一頁圖片載入失敗"));
       image.src = source;
     });
-    this.endStroke();
-    this.worldContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
-    this.worldContext.drawImage(image, 0, 0, this.options.worldWidth, this.options.worldHeight);
+    this.baseContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
+    this.baseContext.drawImage(image, 0, 0, this.options.worldWidth, this.options.worldHeight);
     this.render();
   }
 
@@ -124,7 +138,8 @@ export class DrawingSurface {
       -this.camera.x * this.dpr * this.camera.zoom,
       -this.camera.y * this.dpr * this.camera.zoom
     );
-    ctx.drawImage(this.worldCanvas, 0, 0);
+    ctx.drawImage(this.baseCanvas, 0, 0);
+    ctx.drawImage(this.strokeCanvas, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -137,7 +152,8 @@ export class DrawingSurface {
     if (!ctx) throw new Error("無法建立輸出畫布");
     ctx.fillStyle = this.options.background;
     ctx.fillRect(0, 0, output.width, output.height);
-    ctx.drawImage(this.worldCanvas, 0, 0);
+    ctx.drawImage(this.baseCanvas, 0, 0);
+    ctx.drawImage(this.strokeCanvas, 0, 0);
     return output.toDataURL("image/png");
   }
 
@@ -153,26 +169,26 @@ export class DrawingSurface {
   }
 
   private drawSegment(from: Point, to: Point, brush: Brush): void {
-    this.worldContext.save();
-    this.worldContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
-    this.worldContext.strokeStyle = brush.color;
-    this.worldContext.lineWidth = brush.size;
-    this.worldContext.lineCap = "round";
-    this.worldContext.lineJoin = "round";
-    this.worldContext.beginPath();
-    this.worldContext.moveTo(from.x, from.y);
-    this.worldContext.lineTo(to.x, to.y);
-    this.worldContext.stroke();
-    this.worldContext.restore();
+    this.strokeContext.save();
+    this.strokeContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
+    this.strokeContext.strokeStyle = brush.color;
+    this.strokeContext.lineWidth = brush.size;
+    this.strokeContext.lineCap = "round";
+    this.strokeContext.lineJoin = "round";
+    this.strokeContext.beginPath();
+    this.strokeContext.moveTo(from.x, from.y);
+    this.strokeContext.lineTo(to.x, to.y);
+    this.strokeContext.stroke();
+    this.strokeContext.restore();
   }
 
   private drawDot(point: Point, brush: Brush): void {
-    this.worldContext.save();
-    this.worldContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
-    this.worldContext.fillStyle = brush.color;
-    this.worldContext.beginPath();
-    this.worldContext.arc(point.x, point.y, brush.size / 2, 0, Math.PI * 2);
-    this.worldContext.fill();
-    this.worldContext.restore();
+    this.strokeContext.save();
+    this.strokeContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
+    this.strokeContext.fillStyle = brush.color;
+    this.strokeContext.beginPath();
+    this.strokeContext.arc(point.x, point.y, brush.size / 2, 0, Math.PI * 2);
+    this.strokeContext.fill();
+    this.strokeContext.restore();
   }
 }
