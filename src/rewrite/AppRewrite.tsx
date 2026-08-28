@@ -85,10 +85,10 @@ function AppRewrite() {
 
   useEffect(() => {
     const currentHash = window.location.hash.replace("#", "").toUpperCase();
-    if (currentHash !== roomId) {
+    if (currentHash !== roomId && createIfMissing) {
       window.location.hash = roomId;
     }
-  }, [roomId]);
+  }, [createIfMissing, roomId]);
 
   const saveName = useCallback(async (name: string) => {
     const next = name.trim().slice(0, 12);
