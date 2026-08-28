@@ -90,6 +90,7 @@ function AppRewrite() {
     return (
       <ReviewPage
         comic={viewingComic}
+        map={viewingComic.map ?? "earth"}
         onBack={() => setViewingComic(null)}
         readOnly
       />
