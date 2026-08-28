@@ -11,8 +11,18 @@ import LobbyPage from "./pages/LobbyPage";
 import ReviewPage from "./pages/ReviewPage";
 import HistoryPage from "./pages/HistoryPage";
 
-function readRoomId(): string {
-  return window.location.hash.replace("#", "").trim().toUpperCase() || generateRoomId();
+interface RoomTarget {
+  id: string;
+  createIfMissing: boolean;
+}
+
+function readRoomTarget(): RoomTarget {
+  const fromHash = window.location.hash.replace("#", "").trim().toUpperCase();
+  if (fromHash) {
+    return { id: fromHash, createIfMissing: false };
+  }
+
+  return { id: generateRoomId(), createIfMissing: true };
 }
 
 function readPlayerId(): string {
@@ -26,7 +36,8 @@ function readPlayerId(): string {
 }
 
 function AppRewrite() {
-  const [roomId, setRoomId] = useState(readRoomId);
+  const [roomTarget, setRoomTarget] = useState<RoomTarget>(readRoomTarget);
+  const { id: roomId, createIfMissing } = roomTarget;
   const [playerId] = useState(readPlayerId);
   const [playerName, setPlayerName] = useState(
     () => sessionStorage.getItem("relay_comic_player_name") ?? ""
@@ -35,7 +46,12 @@ function AppRewrite() {
   const [viewingComic, setViewingComic] = useState<Comic | null>(null);
   const [viewportHeight, setViewportHeight] = useState(getSafeViewportHeight);
 
-  const roomState = useRoom({ roomId, playerId, playerName });
+  const roomState = useRoom({
+    roomId,
+    playerId,
+    playerName,
+    createIfMissing,
+  });
   const { room, players, isHost, loading, start, submit, leave } = roomState;
 
   useEffect(() => {
@@ -52,10 +68,16 @@ function AppRewrite() {
   }, []);
 
   useEffect(() => {
-    const handler = () => setRoomId(readRoomId());
+    const handler = () => {
+      const nextId = window.location.hash.replace("#", "").trim().toUpperCase();
+      if (!nextId || nextId === roomTarget.id) return;
+      setRoomTarget({ id: nextId, createIfMissing: false });
+      setScreen("game");
+    };
+
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
-  }, []);
+  }, [roomTarget.id]);
 
   useEffect(() => {
     const currentHash = window.location.hash.replace("#", "").toUpperCase();
@@ -75,7 +97,18 @@ function AppRewrite() {
   const joinRoom = useCallback((nextRoom: string) => {
     const normalized = nextRoom.trim().toUpperCase();
     if (!normalized) return;
+    if (normalized === roomId) return;
+
+    setRoomTarget({ id: normalized, createIfMissing: false });
+    setScreen("game");
     window.location.hash = normalized;
+  }, [roomId]);
+
+  const createNewRoom = useCallback(() => {
+    const next = generateRoomId();
+    setRoomTarget({ id: next, createIfMissing: true });
+    setScreen("lobby");
+    window.location.hash = next;
   }, []);
 
   const handleLeaveGame = useCallback(() => {
@@ -103,10 +136,22 @@ function AppRewrite() {
   }
 
   if (screen === "history") {
+    return <HistoryPage onBack={() => setScreen("lobby")} onOpen={setViewingComic} />;
+  }
+
+  if (!room && !createIfMissing) {
     return (
-      <HistoryPage
-        onBack={() => setScreen("lobby")}
-        onOpen={setViewingComic}
+      <LobbyPage
+        roomId={roomId}
+        playerName={playerName}
+        players={[]}
+        isHost={false}
+        roomMissing
+        onSaveName={saveName}
+        onJoinRoom={joinRoom}
+        onCreateRoom={createNewRoom}
+        onStart={start}
+        onHistory={() => setScreen("history")}
       />
     );
   }
@@ -134,8 +179,10 @@ function AppRewrite() {
       playerName={playerName}
       players={players}
       isHost={isHost}
+      roomMissing={false}
       onSaveName={saveName}
       onJoinRoom={joinRoom}
+      onCreateRoom={createNewRoom}
       onStart={start}
       onHistory={() => setScreen("history")}
     />
