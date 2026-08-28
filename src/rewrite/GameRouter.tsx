@@ -7,6 +7,7 @@ import {
   type Player,
   type RoomState,
 } from "./domain";
+import { getGameFlow } from "./game/getGameFlow";
 import { getGameMode } from "./game/GameMode";
 import DrawingScreen from "./DrawingScreen";
 import ReviewPage from "./pages/ReviewPage";
@@ -44,10 +45,17 @@ export default function GameRouter({
 
   if (room?.phase === "playing") {
     const mode = getGameMode(room.mode);
+    const flow = getGameFlow(room.mode);
 
     if (room.currentPlayerId === playerId) {
-      const previousPage = room.currentRound > 1
-        ? room.pages?.[String(room.currentRound - 1)] ?? null
+      const previousKey = flow.getPreviousDrawingKey({
+        currentRound: room.currentRound,
+        currentPlayerId: room.currentPlayerId,
+        playerIds: players.map((player) => player.id),
+      });
+
+      const previousPage = previousKey
+        ? room.pages?.[previousKey] ?? null
         : null;
 
       return (
