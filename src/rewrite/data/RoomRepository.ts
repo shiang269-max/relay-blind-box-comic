@@ -6,12 +6,7 @@ import {
   type Unsubscribe,
 } from "firebase/database";
 import { db } from "../../lib/firebase";
-import {
-  getDefaultGameMode,
-  type MapType,
-  type Player,
-  type RoomState,
-} from "../domain";
+import { getDefaultGameMode, type MapType, type Player, type RoomState } from "../domain";
 import { createGameState } from "../game/GameState";
 import type { GameModeId } from "../game/GameMode";
 import { createRelayModeState } from "../game/RelayModeState";
@@ -37,27 +32,19 @@ export function watchRoom(
   });
 }
 
-export async function upsertPlayer(
-  roomId: string,
-  player: Player
-): Promise<void> {
+export async function upsertPlayer(roomId: string, player: Player): Promise<void> {
   await runTransaction(
     roomRef(roomId),
     (current: RoomState | null) => {
       if (!current) {
         const mode = getDefaultGameMode();
         const game = createGameState(mode, null);
-
-        if (mode === "relay-30") {
-          game.modeState = createRelayModeState();
-        }
+        if (mode === "relay-30") game.modeState = createRelayModeState();
 
         return {
           map: "earth",
           game,
-          players: {
-            [player.id]: player,
-          },
+          players: { [player.id]: player },
           createdAt: Date.now(),
         } satisfies RoomState;
       }
@@ -77,43 +64,22 @@ export async function upsertPlayer(
   );
 }
 
-export async function startPlayerPresence(
-  roomId: string,
-  playerId: string
-): Promise<void> {
+export async function startPlayerPresence(roomId: string, playerId: string): Promise<void> {
   const playerRef = ref(db, `rooms/${roomId}/players/${playerId}`);
   await onDisconnect(playerRef).remove();
 }
 
-/**
- * 主動離開和暫時斷線分開處理：
- * - 暫時斷線：Presence 移除玩家，由 useRoom 給予寬限時間。
- * - 主動離開：立即在 transaction 中移除玩家；若剛好輪到自己，
- *   同一個 transaction 直接把未完成回合交給剩餘玩家。
- * - 最後一位玩家主動離開：直接刪除整個房間，避免留下空房間與過期 game state。
- */
-export async function leaveRoom(
-  roomId: string,
-  playerId: string
-): Promise<boolean> {
+export async function leaveRoom(roomId: string, playerId: string): Promise<boolean> {
   const result = await runTransaction(
     roomRef(roomId),
     (current: RoomState | null) => {
-      if (!current) return;
-      if (!current.players[playerId]) return;
+      if (!current || !current.players[playerId]) return;
 
       const nextPlayers = { ...current.players };
       delete nextPlayers[playerId];
+      if (Object.keys(nextPlayers).length === 0) return null;
 
-      if (Object.keys(nextPlayers).length === 0) {
-        return null;
-      }
-
-      const nextRoom: RoomState = {
-        ...current,
-        players: nextPlayers,
-      };
-
+      const nextRoom: RoomState = { ...current, players: nextPlayers };
       return recoverMissingCurrentPlayer(nextRoom) ?? nextRoom;
     },
     { applyLocally: false }
@@ -122,13 +88,7 @@ export async function leaveRoom(
   return result.committed;
 }
 
-/**
- * Firebase presence 會移除離線玩家，但共用 game state 不會自動更新。
- * 此 transaction 只在寬限時間結束後、玩家仍未回來時才由 useRoom 呼叫。
- */
-export async function recoverMissingCurrentPlayerTurn(
-  roomId: string
-): Promise<boolean> {
+export async function recoverMissingCurrentPlayerTurn(roomId: string): Promise<boolean> {
   const result = await runTransaction(
     roomRef(roomId),
     (current: RoomState | null) => {
@@ -154,16 +114,12 @@ export async function startGame(
 
       const players = current?.players ?? {};
       const hostId = getHostId(current);
-
       if (!hostId) return;
 
       const game = createGameState(mode, hostId);
       game.phase = "playing";
       game.currentTurn = 1;
-
-      if (mode === "relay-30") {
-        game.modeState = createRelayModeState();
-      }
+      if (mode === "relay-30") game.modeState = createRelayModeState();
 
       return {
         map,
@@ -176,11 +132,7 @@ export async function startGame(
   );
 }
 
-export async function submitRound(
-  roomId: string,
-  playerId: string,
-  pageDataUrl: string
-): Promise<boolean> {
+export async function submitRound(roomId: string, playerId: string, pageDataUrl: string): Promise<boolean> {
   const result = await runTransaction(
     roomRef(roomId),
     (current: RoomState | null) => {
@@ -193,15 +145,10 @@ export async function submitRound(
   return result.committed;
 }
 
-export function getOrderedPlayers(
-  room: RoomState | null
-): Player[] {
+export function getOrderedPlayers(room: RoomState | null): Player[] {
   return orderPlayers(room?.players);
 }
 
-export function isRoomHost(
-  room: RoomState | null,
-  playerId: string
-): boolean {
+export function isRoomHost(room: RoomState | null, playerId: string): boolean {
   return getHostId(room) === playerId;
 }
