@@ -22,6 +22,7 @@ import {
   getHostId,
   nextRoundState,
   orderPlayers,
+  recoverMissingCurrentPlayer,
 } from "../game/GameRules";
 
 function roomRef(roomId: string) {
@@ -93,6 +94,25 @@ export async function leaveRoom(
     ref(db, `rooms/${roomId}/players/${playerId}`),
     null
   );
+}
+
+/**
+ * Firebase presence 會移除離線玩家，但共用 game state 不會自動更新。
+ * 這個 transaction 讓任何仍在線的客戶端都可以安全恢復卡住的回合。
+ */
+export async function recoverMissingCurrentPlayerTurn(
+  roomId: string
+): Promise<boolean> {
+  const result = await runTransaction(
+    roomRef(roomId),
+    (current: RoomState | null) => {
+      if (!current) return;
+      return recoverMissingCurrentPlayer(current) ?? undefined;
+    },
+    { applyLocally: false }
+  );
+
+  return result.committed;
 }
 
 export async function startGame(
