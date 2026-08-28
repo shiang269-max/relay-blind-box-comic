@@ -8,6 +8,7 @@ import {
   type MapType,
 } from "./domain";
 import type { GameMode } from "./game/GameMode";
+import { DrawingSession } from "./drawing/DrawingSession";
 import { DrawingSurface, type Brush } from "./drawing/DrawingSurface";
 import { useDrawingInteraction } from "./drawing/useDrawingInteraction";
 
@@ -36,6 +37,7 @@ export default function DrawingScreen({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<DrawingSurface | null>(null);
+  const sessionRef = useRef<DrawingSession | null>(null);
 
   const [color, setColor] = useState("#000000");
   const [size, setSize] = useState(8);
@@ -68,8 +70,10 @@ export default function DrawingScreen({
       worldHeight: WORLD_HEIGHT,
       background,
     });
+    const session = new DrawingSession(surface);
 
     surfaceRef.current = surface;
+    sessionRef.current = session;
     resize();
 
     if (previousPage) {
@@ -82,9 +86,9 @@ export default function DrawingScreen({
 
     return () => {
       observer.disconnect();
-      if (surfaceRef.current === surface) {
-        surfaceRef.current = null;
-      }
+      session.end();
+      if (surfaceRef.current === surface) surfaceRef.current = null;
+      if (sessionRef.current === session) sessionRef.current = null;
     };
   }, [background, previousPage, resize]);
 
@@ -95,18 +99,19 @@ export default function DrawingScreen({
     handleWheel,
   } = useDrawingInteraction({
     surfaceRef,
+    sessionRef,
     brush,
     moveMode,
   });
 
   const handleSubmit = async () => {
-    const surface = surfaceRef.current;
-    if (!surface || submitting) return;
+    const session = sessionRef.current;
+    if (!session || submitting) return;
 
     setSubmitting(true);
 
     try {
-      await onSubmit(surface.exportPng());
+      await onSubmit(session.exportPng());
     } finally {
       setSubmitting(false);
     }
@@ -133,7 +138,7 @@ export default function DrawingScreen({
         )}
 
         <button
-          onClick={() => surfaceRef.current?.clear()}
+          onClick={() => sessionRef.current?.clear()}
           className="rounded bg-white/10 px-2 py-1 text-xs"
         >
           清除
