@@ -1,23 +1,25 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
+import type { DrawingSession } from "./DrawingSession";
 import type { DrawingSurface, Brush } from "./DrawingSurface";
 
 type ScreenPoint = { x: number; y: number };
 
 interface UseDrawingInteractionOptions {
   surfaceRef: React.RefObject<DrawingSurface | null>;
+  sessionRef: React.RefObject<DrawingSession | null>;
   brush: () => Brush;
   moveMode: boolean;
 }
 
 export function useDrawingInteraction({
   surfaceRef,
+  sessionRef,
   brush,
   moveMode,
 }: UseDrawingInteractionOptions) {
   const activePointers = useRef(new Map<number, ScreenPoint>());
   const pinchDistance = useRef<number | null>(null);
   const panPoint = useRef<ScreenPoint | null>(null);
-  const [drawing, setDrawing] = useState(false);
 
   const getPinchDistance = useCallback(() => {
     const points = [...activePointers.current.values()];
@@ -32,31 +34,32 @@ export function useDrawingInteraction({
     canvas.setPointerCapture(event.pointerId);
 
     const surface = surfaceRef.current;
-    if (!surface) return;
+    const session = sessionRef.current;
+    if (!surface || !session) return;
 
     const screen = surface.eventToScreen(event.nativeEvent);
     activePointers.current.set(event.pointerId, screen);
 
     if (activePointers.current.size >= 2) {
-      surface.endStroke();
-      setDrawing(false);
+      session.end();
       pinchDistance.current = getPinchDistance();
       return;
     }
 
     if (moveMode) {
+      session.end();
       panPoint.current = screen;
       return;
     }
 
-    const world = surface.eventToWorld(event.nativeEvent);
-    if (surface.startStroke(world, brush())) setDrawing(true);
-  }, [brush, getPinchDistance, moveMode, surfaceRef]);
+    session.begin(surface.eventToWorld(event.nativeEvent), brush());
+  }, [brush, getPinchDistance, moveMode, sessionRef, surfaceRef]);
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault();
     const surface = surfaceRef.current;
-    if (!surface) return;
+    const session = sessionRef.current;
+    if (!surface || !session) return;
 
     const screen = surface.eventToScreen(event.nativeEvent);
     if (activePointers.current.has(event.pointerId)) {
@@ -96,9 +99,8 @@ export function useDrawingInteraction({
       return;
     }
 
-    if (!drawing) return;
-    surface.continueStroke(surface.eventToWorld(event.nativeEvent), brush());
-  }, [brush, drawing, getPinchDistance, moveMode, surfaceRef]);
+    session.move(surface.eventToWorld(event.nativeEvent), brush());
+  }, [brush, getPinchDistance, moveMode, sessionRef, surfaceRef]);
 
   const finishPointer = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget;
@@ -114,11 +116,9 @@ export function useDrawingInteraction({
 
     if (activePointers.current.size === 0) {
       panPoint.current = null;
+      sessionRef.current?.end();
     }
-
-    surfaceRef.current?.endStroke();
-    setDrawing(false);
-  }, [surfaceRef]);
+  }, [sessionRef]);
 
   const handleWheel = useCallback((event: React.WheelEvent<HTMLCanvasElement>) => {
     event.preventDefault();
