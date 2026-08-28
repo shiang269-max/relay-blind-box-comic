@@ -8,10 +8,21 @@ export interface Size {
   height: number;
 }
 
+/**
+ * 唯一的視角模型。
+ *
+ * - viewport：CSS 像素空間
+ * - world：固定 3000 × 5000 世界座標
+ * - position：世界座標中的左上角視點
+ * - zoom：每 1 世界單位對應多少 CSS 像素
+ *
+ * 所有輸入都必須先進入 CSS screen space，再由本類轉成 world space。
+ */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
   private position: Point = { x: 0, y: 0 };
   private _zoom = 1;
+  private initialized = false;
 
   constructor(
     private readonly world: Size,
@@ -44,13 +55,38 @@ export class Camera {
       width: Math.max(1, width),
       height: Math.max(1, height),
     };
+
+    if (!this.initialized) {
+      this.initialized = true;
+      this.fitToWorld();
+      return;
+    }
+
+    this.clamp();
+  }
+
+  /** 讓整個世界完整落在目前 viewport 中。 */
+  fitToWorld(): void {
+    const fitZoom = Math.min(
+      this.viewport.width / this.world.width,
+      this.viewport.height / this.world.height
+    );
+
+    this._zoom = this.clampZoom(fitZoom);
+
+    const visibleWidth = this.viewport.width / this._zoom;
+    const visibleHeight = this.viewport.height / this._zoom;
+
+    this.position = {
+      x: (this.world.width - visibleWidth) / 2,
+      y: (this.world.height - visibleHeight) / 2,
+    };
+
     this.clamp();
   }
 
   reset(): void {
-    this._zoom = 1;
-    this.position = { x: 0, y: 0 };
-    this.clamp();
+    this.fitToWorld();
   }
 
   setZoom(zoom: number): void {
@@ -63,6 +99,10 @@ export class Camera {
     this.clamp();
   }
 
+  /**
+   * dx / dy 是 CSS screen space 的拖曳量。
+   * 拖曳畫面時，camera 必須反向移動。
+   */
   panByScreen(dx: number, dy: number): void {
     this.setPosition(
       this.position.x - dx / this._zoom,
@@ -70,13 +110,20 @@ export class Camera {
     );
   }
 
+  /**
+   * 以指定 screen point 為錨點縮放。
+   * 縮放前後該 screen point 對應同一個 world point。
+   */
   zoomAt(screen: Point, factor: number): void {
     const anchor = this.screenToWorld(screen);
+
     this._zoom = this.clampZoom(this._zoom * factor);
+
     this.position = {
       x: anchor.x - screen.x / this._zoom,
       y: anchor.y - screen.y / this._zoom,
     };
+
     this.clamp();
   }
 
