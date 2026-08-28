@@ -4,6 +4,7 @@ import {
   generateRoomId,
   type Comic,
 } from "./domain";
+import { getSafeViewportHeight } from "./mobile";
 import { useRoom } from "./useRoom";
 import GameRouter from "./GameRouter";
 import LobbyPage from "./pages/LobbyPage";
@@ -32,9 +33,23 @@ function AppRewrite() {
   );
   const [screen, setScreen] = useState<"game" | "lobby" | "history">("game");
   const [viewingComic, setViewingComic] = useState<Comic | null>(null);
+  const [viewportHeight, setViewportHeight] = useState(getSafeViewportHeight);
 
   const roomState = useRoom({ roomId, playerId, playerName });
   const { room, players, isHost, loading, start, submit } = roomState;
+
+  useEffect(() => {
+    const updateViewport = () => setViewportHeight(getSafeViewportHeight());
+    updateViewport();
+
+    window.addEventListener("resize", updateViewport);
+    window.visualViewport?.addEventListener("resize", updateViewport);
+
+    return () => {
+      window.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener("resize", updateViewport);
+    };
+  }, []);
 
   useEffect(() => {
     const handler = () => setRoomId(readRoomId());
@@ -65,7 +80,7 @@ function AppRewrite() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+      <div className="flex items-center justify-center bg-slate-950 text-white" style={{ minHeight: viewportHeight }}>
         載入房間中...
       </div>
     );
