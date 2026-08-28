@@ -3,7 +3,7 @@ import type { Point } from "../types/Point";
 
 export class Pointer {
   static getCanvasPosition(
-    event: PointerEvent,
+    event: MouseEvent,
     canvas: HTMLCanvasElement
   ): Point {
     const rect =
@@ -47,7 +47,7 @@ export class Pointer {
   }
 
   static getScreenPosition(
-    event: PointerEvent,
+    event: MouseEvent,
     canvas: HTMLCanvasElement
   ): Point {
     return this.getCanvasPosition(
