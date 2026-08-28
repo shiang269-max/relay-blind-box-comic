@@ -1,7 +1,13 @@
 import { useCallback } from "react";
 import { ref, set } from "firebase/database";
 import { db } from "../lib/firebase";
-import { TOTAL_ROUNDS, generateComicId, type Comic, type Player, type RoomState } from "./domain";
+import {
+  generateComicId,
+  type Comic,
+  type Player,
+  type RoomState,
+} from "./domain";
+import { getGameMode } from "./game/GameMode";
 import DrawingScreen from "./DrawingScreen";
 import ReviewPage from "./pages/ReviewPage";
 import WaitingPage from "./pages/WaitingPage";
@@ -37,6 +43,8 @@ export default function GameRouter({
   }, [room?.pages]);
 
   if (room?.phase === "playing") {
+    const mode = getGameMode(room.mode);
+
     if (room.currentPlayerId === playerId) {
       const previousPage = room.currentRound > 1
         ? room.pages?.[String(room.currentRound - 1)] ?? null
@@ -44,8 +52,8 @@ export default function GameRouter({
 
       return (
         <DrawingScreen
+          mode={mode}
           round={room.currentRound}
-          totalRounds={TOTAL_ROUNDS}
           map={room.map}
           playerName={playerName}
           previousPage={previousPage}
@@ -58,7 +66,8 @@ export default function GameRouter({
     return (
       <WaitingPage
         round={room.currentRound}
-        totalRounds={TOTAL_ROUNDS}
+        totalRounds={mode.totalRounds}
+        modeLabel={mode.label}
         currentPlayerName={currentPlayer?.name ?? "其他玩家"}
       />
     );
