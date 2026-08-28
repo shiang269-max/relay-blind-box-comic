@@ -7,11 +7,13 @@ import {
   type Unsubscribe,
 } from "firebase/database";
 import { db } from "../../lib/firebase";
-import type {
-  MapType,
-  Player,
-  RoomState,
+import {
+  getDefaultGameMode,
+  type MapType,
+  type Player,
+  type RoomState,
 } from "../domain";
+import type { GameModeId } from "../game/GameMode";
 import {
   canStartGame,
   canSubmitRound,
@@ -55,7 +57,8 @@ export async function startPlayerPresence(
 export async function startGame(
   roomId: string,
   playerId: string,
-  map: MapType
+  map: MapType,
+  mode: GameModeId = getDefaultGameMode()
 ): Promise<void> {
   await runTransaction(
     roomRef(roomId),
@@ -70,6 +73,7 @@ export async function startGame(
       return {
         ...(current ?? {}),
         map,
+        mode,
         phase: "playing",
         currentRound: 1,
         currentPlayerId: hostId,
