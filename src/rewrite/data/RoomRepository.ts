@@ -3,7 +3,6 @@ import {
   onValue,
   ref,
   runTransaction,
-  set,
   type Unsubscribe,
 } from "firebase/database";
 import { db } from "../../lib/firebase";
@@ -91,6 +90,7 @@ export async function startPlayerPresence(
  * - 暫時斷線：Presence 移除玩家，由 useRoom 給予寬限時間。
  * - 主動離開：立即在 transaction 中移除玩家；若剛好輪到自己，
  *   同一個 transaction 直接把未完成回合交給剩餘玩家。
+ * - 最後一位玩家主動離開：直接刪除整個房間，避免留下空房間與過期 game state。
  */
 export async function leaveRoom(
   roomId: string,
@@ -104,6 +104,10 @@ export async function leaveRoom(
 
       const nextPlayers = { ...current.players };
       delete nextPlayers[playerId];
+
+      if (Object.keys(nextPlayers).length === 0) {
+        return null;
+      }
 
       const nextRoom: RoomState = {
         ...current,
