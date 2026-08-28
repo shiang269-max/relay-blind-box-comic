@@ -2,7 +2,9 @@ import {
   onDisconnect,
   onValue,
   ref,
+  remove,
   runTransaction,
+  set,
   type Unsubscribe,
 } from "firebase/database";
 import { db } from "../../lib/firebase";
@@ -23,12 +25,28 @@ function roomRef(roomId: string) {
   return ref(db, `rooms/${roomId}`);
 }
 
+function relayPagesRef(roomId: string) {
+  return ref(db, `relayPages/${roomId}`);
+}
+
 export function watchRoom(
   roomId: string,
   callback: (room: RoomState | null) => void
 ): Unsubscribe {
   return onValue(roomRef(roomId), (snapshot) => {
     callback(snapshot.val() as RoomState | null);
+  });
+}
+
+/**
+ * 接力頁面圖片獨立監聽，不再與 room/game transaction 綁在同一個大型節點。
+ */
+export function watchRelayPages(
+  roomId: string,
+  callback: (pages: Record<string, string>) => void
+): Unsubscribe {
+  return onValue(relayPagesRef(roomId), (snapshot) => {
+    callback((snapshot.val() as Record<string, string> | null) ?? {});
   });
 }
 
@@ -107,7 +125,7 @@ export async function startGame(
   map: MapType,
   mode: GameModeId = getDefaultGameMode()
 ): Promise<void> {
-  await runTransaction(
+  const result = await runTransaction(
     roomRef(roomId),
     (current: RoomState | null) => {
       if (!canStartGame(current, playerId)) return;
@@ -130,14 +148,38 @@ export async function startGame(
     },
     { applyLocally: false }
   );
+
+  if (result.committed && mode === "relay-30") {
+    await remove(relayPagesRef(roomId));
+  }
 }
 
+/**
+ * 頁面先寫入獨立路徑，再用小型 room transaction 推進回合。
+ *
+ * 這避免第 N 回合提交時重新寫入 1..N-1 的所有累積圖片，資料量不再隨回合
+ * 成倍增加，也避免舊頁因大型 transaction 同步失敗而整批消失。
+ */
 export async function submitRound(roomId: string, playerId: string, pageDataUrl: string): Promise<boolean> {
+  const pageTurnRef = ref(db, `rooms/${roomId}/game/currentTurn`);
+  const turnSnapshot = await new Promise<number | null>((resolve) => {
+    const unsubscribe = onValue(pageTurnRef, (snapshot) => {
+      unsubscribe();
+      const value = snapshot.val();
+      resolve(typeof value === "number" ? value : null);
+    }, { onlyOnce: true });
+  });
+
+  if (!turnSnapshot || turnSnapshot < 1) return false;
+
+  await set(ref(db, `relayPages/${roomId}/${turnSnapshot}`), pageDataUrl);
+
   const result = await runTransaction(
     roomRef(roomId),
     (current: RoomState | null) => {
       if (!current || !canSubmitRound(current, playerId)) return;
-      return nextRoundState(current, pageDataUrl) ?? undefined;
+      if (current.game.currentTurn !== turnSnapshot) return;
+      return nextRoundState(current) ?? undefined;
     },
     { applyLocally: false }
   );
