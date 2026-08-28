@@ -1,8 +1,8 @@
-import {
-  TOTAL_ROUNDS,
-  type Player,
-  type RoomState,
+import type {
+  Player,
+  RoomState,
 } from "../domain";
+import { getGameMode } from "./GameMode";
 
 export function orderPlayers(
   players: Record<string, Player> | undefined
@@ -49,6 +49,7 @@ export function nextRoundState(
   if (room.phase !== "playing") return null;
   if (!room.currentPlayerId) return null;
 
+  const mode = getGameMode(room.mode);
   const players = orderPlayers(room.players);
   if (players.length === 0) return null;
 
@@ -63,7 +64,9 @@ export function nextRoundState(
     [String(room.currentRound)]: pageDataUrl,
   };
 
-  const isLastRound = room.currentRound >= TOTAL_ROUNDS;
+  const isLastRound =
+    mode.totalRounds !== null &&
+    room.currentRound >= mode.totalRounds;
 
   if (isLastRound) {
     return {
