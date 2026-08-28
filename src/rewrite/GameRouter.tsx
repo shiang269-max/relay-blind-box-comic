@@ -1,14 +1,10 @@
 import { useCallback } from "react";
 import { ref, set } from "firebase/database";
 import { db } from "../lib/firebase";
-import {
-  type Comic,
-  type Player,
-  type RoomState,
-} from "./domain";
+import { type Comic, type Player, type RoomState } from "./domain";
 import { getGameFlow } from "./game/getGameFlow";
 import { getGameMode } from "./game/GameMode";
-import type { RelayModeState } from "./game/RelayModeState";
+import { asRelayModeState } from "./game/GameRules";
 import DrawingScreen from "./DrawingScreen";
 import ReviewPage from "./pages/ReviewPage";
 import WaitingPage from "./pages/WaitingPage";
@@ -16,7 +12,7 @@ import WaitingPage from "./pages/WaitingPage";
 interface GameRouterProps {
   room: RoomState | null;
   players: Player[];
-  submit: (pageDataUrl: string) => Promise<void>;
+  submit: (pageDataUrl: string) => Promise<boolean>;
   roomId: string;
   playerId: string;
   playerName: string;
@@ -35,7 +31,7 @@ export default function GameRouter({
   const saveComic = useCallback(async (title: string) => {
     if (!room || room.game.mode !== "relay-30") return;
 
-    const relayState = room.game.modeState as RelayModeState;
+    const relayState = asRelayModeState(room.game);
 
     await set(ref(db, `comics/${roomId}`), {
       id: roomId,
@@ -55,20 +51,16 @@ export default function GameRouter({
     const flow = getGameFlow(game.mode);
 
     if (game.currentPlayerId === playerId) {
-      if (game.mode !== "relay-30") {
-        return null;
-      }
+      if (game.mode !== "relay-30") return null;
 
-      const relayState = game.modeState as RelayModeState;
+      const relayState = asRelayModeState(game);
       const previousKey = flow.getPreviousDrawingKey({
         currentRound: game.currentTurn,
         currentPlayerId: game.currentPlayerId,
         playerIds: players.map((player) => player.id),
       });
 
-      const previousPage = previousKey
-        ? relayState.pages[previousKey] ?? null
-        : null;
+      const previousPage = previousKey ? relayState.pages[previousKey] ?? null : null;
 
       return (
         <DrawingScreen
@@ -99,7 +91,7 @@ export default function GameRouter({
   if (game.phase === "review") {
     if (game.mode !== "relay-30") return null;
 
-    const relayState = game.modeState as RelayModeState;
+    const relayState = asRelayModeState(game);
     const comic: Comic = {
       id: roomId,
       title: "本局成果",
