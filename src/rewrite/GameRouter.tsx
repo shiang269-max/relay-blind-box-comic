@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { ref, set } from "firebase/database";
 import { db } from "../lib/firebase";
 import {
-  generateComicId,
   type Comic,
   type Player,
   type RoomState,
@@ -37,15 +36,15 @@ export default function GameRouter({
     if (!room || room.game.mode !== "relay-30") return;
 
     const relayState = room.game.modeState as RelayModeState;
-    const id = generateComicId();
 
-    await set(ref(db, `comics/${id}`), {
-      id,
+    await set(ref(db, `comics/${roomId}`), {
+      id: roomId,
       title: title.trim() || "未命名漫畫",
-      createdAt: Date.now(),
+      createdAt: room.createdAt ?? Date.now(),
+      map: room.map,
       pages: relayState.pages,
     });
-  }, [room]);
+  }, [room, roomId]);
 
   if (!room) return null;
 
@@ -105,6 +104,7 @@ export default function GameRouter({
       id: roomId,
       title: "本局成果",
       createdAt: room.createdAt ?? Date.now(),
+      map: room.map,
       pages: relayState.pages,
     };
 
