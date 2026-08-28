@@ -8,6 +8,7 @@ import {
   getOrderedPlayers,
   isRoomHost,
   leaveRoom,
+  recoverMissingCurrentPlayerTurn,
   startGame,
   startPlayerPresence,
   submitRound,
@@ -46,6 +47,26 @@ export function useRoom(session: RoomSession) {
     void upsertPlayer(session.roomId, player);
     void startPlayerPresence(session.roomId, session.playerId);
   }, [session.playerId, session.playerName, session.roomId]);
+
+  /**
+   * 當目前輪到的玩家因斷線或離開而被 Presence 移除時，
+   * 任何在線客戶端都可以觸發同一個 transaction。
+   * Transaction 只會成功一次，因此多人同時偵測不會造成重複跳過。
+   */
+  useEffect(() => {
+    if (!room) return;
+    if (room.game.phase !== "playing") return;
+
+    const currentPlayerId = room.game.currentPlayerId;
+    if (!currentPlayerId) {
+      void recoverMissingCurrentPlayerTurn(session.roomId);
+      return;
+    }
+
+    if (!room.players[currentPlayerId]) {
+      void recoverMissingCurrentPlayerTurn(session.roomId);
+    }
+  }, [room, session.roomId]);
 
   const players = useMemo(() => {
     return getOrderedPlayers(room);
