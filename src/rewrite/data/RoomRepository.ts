@@ -66,7 +66,10 @@ export async function upsertPlayer(
         ...current,
         players: {
           ...current.players,
-          [player.id]: player,
+          [player.id]: {
+            ...player,
+            joinedAt: current.players[player.id]?.joinedAt ?? player.joinedAt,
+          },
         },
       } satisfies RoomState;
     },
@@ -78,9 +81,18 @@ export async function startPlayerPresence(
   roomId: string,
   playerId: string
 ): Promise<void> {
-  await onDisconnect(
-    ref(db, `rooms/${roomId}/players/${playerId}`)
-  ).remove();
+  const playerRef = ref(db, `rooms/${roomId}/players/${playerId}`);
+  await onDisconnect(playerRef).remove();
+}
+
+export async function leaveRoom(
+  roomId: string,
+  playerId: string
+): Promise<void> {
+  await set(
+    ref(db, `rooms/${roomId}/players/${playerId}`),
+    null
+  );
 }
 
 export async function startGame(
