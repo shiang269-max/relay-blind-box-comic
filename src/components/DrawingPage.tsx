@@ -3,15 +3,13 @@ import { Palette, Minus, Plus, Eraser, Check, X, Flag } from "lucide-react";
 import { getTimeOfDay } from "../lib/gameTypes";
 
 // 舊 Engine
-import { Camera } from "../engine/Camera";
-import { CameraController } from "../engine/CameraController";
-import { Coordinate } from "../engine/Coordinate";
 
 // 新 Engine2
+import { Camera as Engine2Camera } from "../engine2/Camera";
+import { CameraController } from "../engine2/CameraController";
 import { DrawingEngine } from "../engine2/DrawingEngine";
 import { Renderer } from "../engine2/Renderer";
 import { Pointer } from "../engine2/Pointer";
-import { Camera as Engine2Camera } from "../engine2/Camera";
 
 import type { MapType, TimeOfDay } from "../lib/gameTypes";
 
@@ -69,9 +67,11 @@ export default function DrawingPage({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const drawingEngineRef = useRef<DrawingEngine | null>(null);
-const rendererRef = useRef<Renderer | null>(null);
-const camera2Ref = useRef<Engine2Camera | null>(null);
-const pointerRef = useRef<Pointer | null>(null);
+  const rendererRef = useRef<Renderer | null>(null);
+  const cameraRef = useRef(new Engine2Camera());
+  const cameraControllerRef = useRef(
+    new CameraController(cameraRef.current)
+  );
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(6);
@@ -79,103 +79,84 @@ const pointerRef = useRef<Pointer | null>(null);
   const [toolOpen, setToolOpen] = useState(false);
   const [showPrev, setShowPrev] = useState(false);
   const [moveMode, setMoveMode] = useState(false); // 新增 moveMode 狀態
-  const lastPos = useRef<{ x: number; y: number } | null>(null);
-  const lastScrollPos = useRef<{ x: number; y: number } | null>(null); // 新增 lastScrollPos ref
-  const cameraRef = useRef(new Camera(0, 0, 1));
-  const cameraControllerRef = useRef(new CameraController(cameraRef.current, CANVAS_WIDTH, CANVAS_HEIGHT));
-const [zoom, setZoom] = useState(1);
 
   const timeOfDay = getTimeOfDay(round);
   const canvasBg = getCanvasBgColor(map, timeOfDay);
   const headerColors = getHeaderColors(map, timeOfDay);
 
   const getCanvasPos = useCallback((e: React.PointerEvent) => {
-  const canvas = canvasRef.current;
-  if (!canvas) return null;
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
 
-  return Pointer.getCanvasPosition(
-    e.nativeEvent,
-    canvas
-  );
-}, []);
+    return Pointer.getWorldPosition(
+      e.nativeEvent,
+      canvas,
+      cameraRef.current
+    );
+  }, []);
 
   const initCanvas = useCallback(() => {
-  const canvas = canvasRef.current;
-  if (!canvas) return;
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  const camera = new Engine2Camera();
-  const renderer = new Renderer(ctx);
-  const pointer = new Pointer();
-
-  camera2Ref.current = camera;
-  rendererRef.current = renderer;
-  pointerRef.current = pointer;
-
-  drawingEngineRef.current = new DrawingEngine(
-    camera,
-    renderer,
-    pointer
-  );
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-}, []);
-
-  // Resize canvas to fill container
-  // Resize canvas to fill container
-// Resize canvas to fill container
-useEffect(() => {
-  const resize = () => {
-    const container = containerRef.current;
     const canvas = canvasRef.current;
-    if (!container || !canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
-    // Save existing drawing
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = canvas.width;
-    tempCanvas.height = canvas.height;
-    tempCanvas.getContext("2d")?.drawImage(canvas, 0, 0);
-
-    canvas.width = CANVAS_WIDTH;
-    canvas.height = CANVAS_HEIGHT;
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    cameraRef.current.setViewport(canvas.width, canvas.height);
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.drawImage(
-      tempCanvas,
-      0,
-      0,
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT
+    const renderer = new Renderer(ctx, CANVAS_WIDTH, CANVAS_HEIGHT);
+    const pointer = new Pointer();
+
+    rendererRef.current = renderer;
+    drawingEngineRef.current = new DrawingEngine(
+      cameraRef.current,
+      renderer,
+      pointer
     );
-  };
+    drawingEngineRef.current.clear(CANVAS_WIDTH, CANVAS_HEIGHT);
+  }, []);
 
-  resize();
-  initCanvas();
+  useEffect(() => {
+    initCanvas();
 
-  window.addEventListener("resize", resize);
+    const resize = () => {
+      const canvas = canvasRef.current;
+      const container = containerRef.current;
+      if (!canvas || !container) return;
 
-  return () => {
-    window.removeEventListener("resize", resize);
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      cameraRef.current.setViewport(canvas.width, canvas.height);
+      drawingEngineRef.current?.render();
+    };
 
-  // On mount: restore previous snapshot so strokes accumulate across rounds
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, [initCanvas]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+
+    const preventBrowserZoom = (event: WheelEvent) => {
+      if (event.ctrlKey) event.preventDefault();
+    };
+
+    canvas.addEventListener("wheel", preventBrowserZoom, { passive: false });
+    return () => canvas.removeEventListener("wheel", preventBrowserZoom);
+  }, []);
+
+  // On mount: restore previous snapshot so strokes accumulate across rounds
+  useEffect(() => {
     if (prevPageUrl) {
       const img = new Image();
-      img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      img.onload = () => drawingEngineRef.current?.drawImage(img, 0, 0);
       img.src = prevPageUrl;
     } else {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawingEngineRef.current?.clear(CANVAS_WIDTH, CANVAS_HEIGHT);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -185,80 +166,97 @@ useEffect(() => {
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
 
     if (moveMode) {
-    cameraControllerRef.current.startMoveMode(
-        e.nativeEvent,
-        lastScrollPos
-    );
-} else {
+      const point = getCanvasPos(e);
+      if (point) cameraControllerRef.current.startMove(point);
+    } else {
       const pos = getCanvasPos(e);
-if (!pos) return;
+      if (!pos) return;
 
-setIsDrawing(true);
-lastPos.current = pos;
+      setIsDrawing(true);
 
-drawingEngineRef.current?.startDrawing(pos);
+      drawingEngineRef.current?.startDrawing(pos);
     }
-  }, [getCanvasPos, color, brushSize, isEraser, moveMode]);
+  }, [getCanvasPos, moveMode]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
 
     if (moveMode) {
-      cameraControllerRef.current.handleMoveMode(
-    e.nativeEvent,
-    lastScrollPos
-);
+      const point = getCanvasPos(e);
+      if (!point) return;
+
+      cameraControllerRef.current.move(point);
+      drawingEngineRef.current?.render();
     } else {
-  if (!isDrawing) return;
+      if (!isDrawing) return;
 
-  const pos = getCanvasPos(e);
-  if (!pos || !lastPos.current) return;
+      const pos = getCanvasPos(e);
+if (!pos) return;
+console.log("DRAW", {
+  x: Math.round(pos.x),
+  y: Math.round(pos.y),
+  zoom: cameraRef.current.zoom,
+  cameraX: Math.round(cameraRef.current.x),
+  cameraY: Math.round(cameraRef.current.y),
+});
 
-  drawingEngineRef.current?.draw(
-    pos,
-    color,
-    brushSize,
-    isEraser
-  );
 
-  lastPos.current = pos;
-}
+
+drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
+    }
   }, [isDrawing, getCanvasPos, color, brushSize, isEraser, moveMode]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     if (moveMode) {
-      cameraControllerRef.current.endMoveMode(lastScrollPos);
+      cameraControllerRef.current.endMove();
     } else {
-  drawingEngineRef.current?.endDrawing();
+      drawingEngineRef.current?.endDrawing();
 
-  setIsDrawing(false);
-  lastPos.current = null;
-}
+      setIsDrawing(false);
+    }
   }, [moveMode]);
+
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+    if (!e.ctrlKey) return;
+
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const point = Pointer.getWorldPosition(
+      e.nativeEvent as unknown as PointerEvent,
+      canvas,
+      cameraRef.current
+    );
+
+    cameraControllerRef.current.zoomAt(point, e.deltaY < 0 ? 1.1 : 0.9);
+    drawingEngineRef.current?.render();
+  }, []);
 
   const handleClear = () => {
   const canvas = canvasRef.current;
   if (!canvas) return;
 
   drawingEngineRef.current?.clear(
-    canvas.width,
-    canvas.height
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT
   );
 };
 
   const handleSubmit = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+
     // Composite bg color + strokes into an offscreen canvas so the snapshot
     // is fully opaque and ReviewPage shows the correct appearance.
     const flat = document.createElement('canvas');
-    flat.width = canvas.width;
-    flat.height = canvas.height;
-    const ctx = flat.getContext('2d')!;
-    ctx.fillStyle = canvasBg;
-    ctx.fillRect(0, 0, flat.width, flat.height);
-    ctx.drawImage(canvas, 0, 0);
+    flat.width = CANVAS_WIDTH;
+    flat.height = CANVAS_HEIGHT;
+    const context = flat.getContext('2d');
+    if (!context) return;
+
+    renderer.renderTo(context, canvasBg);
     onSubmit(flat.toDataURL('image/png'));
   };
 
@@ -318,42 +316,23 @@ drawingEngineRef.current?.startDrawing(pos);
       </div>
 
       {/* Canvas — fills everything below header */}
-      <div className="flex-1 relative overflow-hidden">
-    <div
-        ref={containerRef}
-        className="relative overflow-scroll w-full h-full"
+      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full"
           style={{
-            width: '100%',
-            height: '100%',
-            overflow: 'scroll',
+            touchAction: 'none',
+            display: 'block',
+            backgroundColor: canvasBg,
+            transition: 'background-color 1s ease',
           }}
-        >
-          <div
-            style={{
-  width: CANVAS_WIDTH,
-  height: CANVAS_HEIGHT,
-  position: "relative",
-  transform: `scale(${zoom})`,
-  transformOrigin: "top left",
-}}
-          >
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 w-full h-full"
-              style={{
-                touchAction: 'none',
-                display: 'block',
-                backgroundColor: canvasBg,
-                transition: 'background-color 1s ease',
-              }}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-            />
-          </div>
-        </div>
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onWheel={handleWheel}
+        />
 
         {/* Previous page overlay */}
         {showPrev && prevPageUrl && (

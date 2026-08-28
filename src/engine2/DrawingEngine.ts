@@ -1,7 +1,7 @@
 import { Camera } from "./Camera";
 import { Renderer } from "./Renderer";
 import { Pointer } from "./Pointer";
-import { Point } from "./Coordinate";
+import type { Point } from "./Coordinate";
 
 export class DrawingEngine {
   private isDrawing = false;
@@ -11,7 +11,9 @@ export class DrawingEngine {
     private readonly camera: Camera,
     private readonly renderer: Renderer,
     private readonly pointer: Pointer
-  ) {}
+  ) {
+    void this.pointer;
+  }
 
   // ===== Drawing =====
 
@@ -40,6 +42,7 @@ export class DrawingEngine {
     }
 
     this.lastPoint = point;
+    this.render();
   }
 
   endDrawing(): void {
@@ -52,6 +55,16 @@ export class DrawingEngine {
     height: number
   ): void {
     this.renderer.clear(width, height);
+    this.render();
+  }
+
+  drawImage(image: CanvasImageSource, x: number, y: number): void {
+    this.renderer.drawImage(image, x, y);
+    this.render();
+  }
+
+  render(): void {
+    this.renderer.render(this.camera);
   }
 
   // ===== Camera =====
@@ -66,5 +79,6 @@ export class DrawingEngine {
     this.isDrawing = false;
     this.lastPoint = null;
     this.camera.reset();
+    this.render();
   }
 }

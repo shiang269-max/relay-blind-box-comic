@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { ref, set, get, onValue, onDisconnect, remove, update } from 'firebase/database';
 import { db } from './lib/firebase';
@@ -31,6 +32,7 @@ function getOrCreatePlayerName(): string {
 }
 
 export default function App() {
+
   const [roomId, setRoomId] = useState<string>(() => getRoomIdFromHash());
   const [myId] = useState<string>(() => getOrCreatePlayerId());
   const [myName, setMyName] = useState<string>(() => getOrCreatePlayerName());

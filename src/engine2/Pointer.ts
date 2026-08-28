@@ -1,4 +1,5 @@
-import { Point } from "./Coordinate";
+import type { Camera } from "./Camera";
+import type { Point } from "./Coordinate";
 
 export class Pointer {
   static getCanvasPosition(
@@ -14,6 +15,14 @@ export class Pointer {
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY,
     };
+  }
+
+  static getWorldPosition(
+    e: PointerEvent,
+    canvas: HTMLCanvasElement,
+    camera: Camera
+  ): Point {
+    return camera.screenToWorld(this.getCanvasPosition(e, canvas));
   }
 
   static getScreenPosition(
