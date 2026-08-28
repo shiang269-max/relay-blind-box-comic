@@ -86,19 +86,41 @@ export async function startPlayerPresence(
   await onDisconnect(playerRef).remove();
 }
 
+/**
+ * 主動離開和暫時斷線分開處理：
+ * - 暫時斷線：Presence 移除玩家，由 useRoom 給予寬限時間。
+ * - 主動離開：立即在 transaction 中移除玩家；若剛好輪到自己，
+ *   同一個 transaction 直接把未完成回合交給剩餘玩家。
+ */
 export async function leaveRoom(
   roomId: string,
   playerId: string
-): Promise<void> {
-  await set(
-    ref(db, `rooms/${roomId}/players/${playerId}`),
-    null
+): Promise<boolean> {
+  const result = await runTransaction(
+    roomRef(roomId),
+    (current: RoomState | null) => {
+      if (!current) return;
+      if (!current.players[playerId]) return;
+
+      const nextPlayers = { ...current.players };
+      delete nextPlayers[playerId];
+
+      const nextRoom: RoomState = {
+        ...current,
+        players: nextPlayers,
+      };
+
+      return recoverMissingCurrentPlayer(nextRoom) ?? nextRoom;
+    },
+    { applyLocally: false }
   );
+
+  return result.committed;
 }
 
 /**
  * Firebase presence 會移除離線玩家，但共用 game state 不會自動更新。
- * 這個 transaction 讓任何仍在線的客戶端都可以安全恢復卡住的回合。
+ * 此 transaction 只在寬限時間結束後、玩家仍未回來時才由 useRoom 呼叫。
  */
 export async function recoverMissingCurrentPlayerTurn(
   roomId: string
