@@ -67,8 +67,8 @@ export function useRoom(session: RoomSession) {
   );
 
   const submit = useCallback(
-    async (pageDataUrl: string) => {
-      await submitRound(
+    async (pageDataUrl: string): Promise<boolean> => {
+      return submitRound(
         session.roomId,
         session.playerId,
         pageDataUrl
