@@ -1,3 +1,8 @@
+import {
+  DEFAULT_GAME_MODE,
+  type GameModeId,
+} from "./game/GameMode";
+
 export const WORLD_WIDTH = 3000;
 export const WORLD_HEIGHT = 5000;
 export const TOTAL_ROUNDS = 30;
@@ -14,6 +19,7 @@ export interface Player {
 
 export interface RoomState {
   map: MapType;
+  mode?: GameModeId;
   phase: RoomPhase;
   currentRound: number;
   currentPlayerId: string | null;
@@ -43,6 +49,10 @@ export function generatePlayerId(): string {
 
 export function generateComicId(): string {
   return generateId(16);
+}
+
+export function getDefaultGameMode(): GameModeId {
+  return DEFAULT_GAME_MODE;
 }
 
 export function getTimeOfDay(round: number): TimeOfDay {
