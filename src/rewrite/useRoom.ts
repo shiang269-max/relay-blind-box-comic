@@ -7,6 +7,7 @@ import type {
 import {
   getOrderedPlayers,
   isRoomHost,
+  leaveRoom,
   startGame,
   startPlayerPresence,
   submitRound,
@@ -76,6 +77,13 @@ export function useRoom(session: RoomSession) {
     [session.playerId, session.roomId]
   );
 
+  const leave = useCallback(async () => {
+    await leaveRoom(
+      session.roomId,
+      session.playerId
+    );
+  }, [session.playerId, session.roomId]);
+
   return {
     room,
     loading,
@@ -83,5 +91,6 @@ export function useRoom(session: RoomSession) {
     isHost,
     start,
     submit,
+    leave,
   };
 }
