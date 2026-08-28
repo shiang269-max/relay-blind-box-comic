@@ -12,11 +12,12 @@ export interface Size {
  * 唯一的視角模型。
  *
  * - viewport：CSS 像素空間
- * - world：固定 3000 × 5000 世界座標
+ * - world：固定世界座標
  * - position：世界座標中的左上角視點
  * - zoom：每 1 世界單位對應多少 CSS 像素
  *
- * 所有輸入都必須先進入 CSS screen space，再由本類轉成 world space。
+ * Resize 時保留「舊 viewport 中心對應的 world point」，
+ * 再以新 viewport 中心重新定位，避免手機網址列或旋轉造成畫面跳動。
  */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
@@ -30,42 +31,40 @@ export class Camera {
     private readonly maxZoom = 10
   ) {}
 
-  get x(): number {
-    return this.position.x;
-  }
-
-  get y(): number {
-    return this.position.y;
-  }
-
-  get zoom(): number {
-    return this._zoom;
-  }
-
-  get viewportWidth(): number {
-    return this.viewport.width;
-  }
-
-  get viewportHeight(): number {
-    return this.viewport.height;
-  }
+  get x(): number { return this.position.x; }
+  get y(): number { return this.position.y; }
+  get zoom(): number { return this._zoom; }
+  get viewportWidth(): number { return this.viewport.width; }
+  get viewportHeight(): number { return this.viewport.height; }
 
   setViewport(width: number, height: number): void {
-    this.viewport = {
+    const nextViewport = {
       width: Math.max(1, width),
       height: Math.max(1, height),
     };
 
     if (!this.initialized) {
+      this.viewport = nextViewport;
       this.initialized = true;
       this.fitToWorld();
       return;
     }
 
+    const worldCenter = this.screenToWorld({
+      x: this.viewport.width / 2,
+      y: this.viewport.height / 2,
+    });
+
+    this.viewport = nextViewport;
+    this._zoom = this.clampZoom(this._zoom);
+    this.position = {
+      x: worldCenter.x - this.viewport.width / 2 / this._zoom,
+      y: worldCenter.y - this.viewport.height / 2 / this._zoom,
+    };
+
     this.clamp();
   }
 
-  /** 讓整個世界完整落在目前 viewport 中。 */
   fitToWorld(): void {
     const fitZoom = Math.min(
       this.viewport.width / this.world.width,
@@ -99,10 +98,6 @@ export class Camera {
     this.clamp();
   }
 
-  /**
-   * dx / dy 是 CSS screen space 的拖曳量。
-   * 拖曳畫面時，camera 必須反向移動。
-   */
   panByScreen(dx: number, dy: number): void {
     this.setPosition(
       this.position.x - dx / this._zoom,
@@ -110,20 +105,13 @@ export class Camera {
     );
   }
 
-  /**
-   * 以指定 screen point 為錨點縮放。
-   * 縮放前後該 screen point 對應同一個 world point。
-   */
   zoomAt(screen: Point, factor: number): void {
     const anchor = this.screenToWorld(screen);
-
     this._zoom = this.clampZoom(this._zoom * factor);
-
     this.position = {
       x: anchor.x - screen.x / this._zoom,
       y: anchor.y - screen.y / this._zoom,
     };
-
     this.clamp();
   }
 
@@ -142,12 +130,7 @@ export class Camera {
   }
 
   isInsideWorld(point: Point): boolean {
-    return (
-      point.x >= 0 &&
-      point.y >= 0 &&
-      point.x <= this.world.width &&
-      point.y <= this.world.height
-    );
+    return point.x >= 0 && point.y >= 0 && point.x <= this.world.width && point.y <= this.world.height;
   }
 
   private clampZoom(zoom: number): number {
@@ -161,19 +144,13 @@ export class Camera {
     if (visibleWidth >= this.world.width) {
       this.position.x = (this.world.width - visibleWidth) / 2;
     } else {
-      this.position.x = Math.max(
-        0,
-        Math.min(this.position.x, this.world.width - visibleWidth)
-      );
+      this.position.x = Math.max(0, Math.min(this.position.x, this.world.width - visibleWidth));
     }
 
     if (visibleHeight >= this.world.height) {
       this.position.y = (this.world.height - visibleHeight) / 2;
     } else {
-      this.position.y = Math.max(
-        0,
-        Math.min(this.position.y, this.world.height - visibleHeight)
-      );
+      this.position.y = Math.max(0, Math.min(this.position.y, this.world.height - visibleHeight));
     }
   }
 }
