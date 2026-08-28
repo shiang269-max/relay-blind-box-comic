@@ -148,12 +148,12 @@ export function useDrawingInteraction({
     if (hadDrawingPointer) onStrokeEnd?.();
   }, [moveMode, onStrokeEnd, resetPinch, sessionRef]);
 
-  const handleWheel = useCallback((event: React.WheelEvent<HTMLCanvasElement>) => {
+  const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault();
     const surface = surfaceRef.current;
     if (!surface) return;
 
-    const screen = surface.eventToScreen(event.nativeEvent);
+    const screen = surface.eventToScreen(event);
     surface.camera.zoomAt(screen, Math.exp(-event.deltaY * 0.0015));
     surface.render();
   }, [surfaceRef]);
