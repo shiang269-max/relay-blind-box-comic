@@ -134,17 +134,17 @@ export async function submitRound(
   roomId: string,
   playerId: string,
   pageDataUrl: string
-): Promise<void> {
-  await runTransaction(
+): Promise<boolean> {
+  const result = await runTransaction(
     roomRef(roomId),
     (current: RoomState | null) => {
-      if (!canSubmitRound(current, playerId)) return;
-      if (!current) return;
-
+      if (!current || !canSubmitRound(current, playerId)) return;
       return nextRoundState(current, pageDataUrl) ?? undefined;
     },
     { applyLocally: false }
   );
+
+  return result.committed;
 }
 
 export function getOrderedPlayers(
