@@ -29,7 +29,7 @@ export default function GameRouter({
   onLeaveGame,
 }: GameRouterProps) {
   const saveComic = useCallback(async (title: string) => {
-    if (!room || room.game.mode !== "relay-30") return;
+    if (!room || (room.game.mode ?? "relay-30") !== "relay-30") return;
 
     const relayState = asRelayModeState(room.game);
 
@@ -45,13 +45,16 @@ export default function GameRouter({
   if (!room) return null;
 
   const { game } = room;
+  const modeId = game.mode ?? "relay-30";
+  const mode = getGameMode(modeId);
 
   if (game.phase === "playing") {
-    const mode = getGameMode(game.mode);
-    const flow = getGameFlow(game.mode);
+    const flow = getGameFlow(modeId);
 
     if (game.currentPlayerId === playerId) {
-      if (game.mode !== "relay-30") return null;
+      if (modeId !== "relay-30") {
+        return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={room.map} />;
+      }
 
       const relayState = asRelayModeState(game);
       const previousKey = flow.getPreviousDrawingKey({
@@ -89,7 +92,9 @@ export default function GameRouter({
   }
 
   if (game.phase === "review") {
-    if (game.mode !== "relay-30") return null;
+    if (modeId !== "relay-30") {
+      return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={room.map} />;
+    }
 
     const relayState = asRelayModeState(game);
     const comic: Comic = {
@@ -103,5 +108,5 @@ export default function GameRouter({
     return <ReviewPage comic={comic} map={room.map} onBack={onLeaveGame} onSave={saveComic} />;
   }
 
-  return null;
+  return <WaitingPage round={game.currentTurn ?? 1} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="等待遊戲狀態" map={room.map} />;
 }
