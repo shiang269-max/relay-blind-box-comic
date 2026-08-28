@@ -50,7 +50,9 @@ export class Camera {
 
   zoomToWorldPoint(point: Point, factor: number): void {
     const screen = this.worldToScreen(point);
+
     this.setZoom(this.zoom * factor);
+
     this.setPosition(
       point.x - screen.x / this.zoom,
       point.y - screen.y / this.zoom
@@ -72,7 +74,7 @@ export class Camera {
       return 0.2;
     }
 
-    return Math.min(
+    return Math.max(
       this.viewportWidth / this.worldWidth,
       this.viewportHeight / this.worldHeight
     );
@@ -82,7 +84,10 @@ export class Camera {
     const visibleWidth = this.viewportWidth / this.zoom;
     const visibleHeight = this.viewportHeight / this.zoom;
 
-    this.x = Math.max(0, Math.min(this.x, this.worldWidth - visibleWidth));
-    this.y = Math.max(0, Math.min(this.y, this.worldHeight - visibleHeight));
+    const maxX = Math.max(0, this.worldWidth - visibleWidth);
+    const maxY = Math.max(0, this.worldHeight - visibleHeight);
+
+    this.x = Math.max(0, Math.min(this.x, maxX));
+    this.y = Math.max(0, Math.min(this.y, maxY));
   }
 }

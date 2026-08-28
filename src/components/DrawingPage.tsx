@@ -26,6 +26,19 @@ interface DrawingPageProps {
   onDevReview: () => void;
 }
 
+interface DebugInfo {
+  containerWidth: number;
+  containerHeight: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  rectWidth: number;
+  rectHeight: number;
+  dpr: number;
+  cameraX: number;
+  cameraY: number;
+  cameraZoom: number;
+}
+
 const COLORS = [
   '#000000', '#ffffff', '#ef4444', '#f97316', '#eab308',
   '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6',
@@ -34,14 +47,14 @@ const COLORS = [
 
 function getCanvasBgColor(map: MapType, time: TimeOfDay): string {
   if (map === 'earth') {
-    if (time === 'day') return '#bfefff'; // light sky blue
-    if (time === 'dusk') return '#ffd580'; // warm amber
-    return '#1a2744';                       // deep night blue
+    if (time === 'day') return '#bfefff';
+    if (time === 'dusk') return '#ffd580';
+    return '#1a2744';
   }
-  // space
-  if (time === 'day') return '#0d1b4b'; // deep space blue
-  if (time === 'dusk') return '#2d0a3e'; // nebula purple
-  return '#050a14';                       // void black
+
+  if (time === 'day') return '#0d1b4b';
+  if (time === 'dusk') return '#2d0a3e';
+  return '#050a14';
 }
 
 function getHeaderColors(map: MapType, time: TimeOfDay) {
@@ -50,6 +63,7 @@ function getHeaderColors(map: MapType, time: TimeOfDay) {
     if (time === 'dusk') return { bg: 'rgba(154,52,18,0.85)', text: '#ffffff' };
     return { bg: 'rgba(15,23,42,0.90)', text: '#e2e8f0' };
   }
+
   if (time === 'day') return { bg: 'rgba(13,27,75,0.90)', text: '#c7d2fe' };
   if (time === 'dusk') return { bg: 'rgba(45,10,62,0.90)', text: '#f0abfc' };
   return { bg: 'rgba(5,10,20,0.95)', text: '#94a3b8' };
@@ -69,20 +83,45 @@ export default function DrawingPage({
   const drawingEngineRef = useRef<DrawingEngine | null>(null);
   const rendererRef = useRef<Renderer | null>(null);
   const cameraRef = useRef(new Engine2Camera());
+
   const cameraControllerRef = useRef(
     new CameraController(cameraRef.current)
   );
+
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(6);
   const [isEraser, setIsEraser] = useState(false);
   const [toolOpen, setToolOpen] = useState(false);
   const [showPrev, setShowPrev] = useState(false);
-  const [moveMode, setMoveMode] = useState(false); // 新增 moveMode 狀態
+  const [moveMode, setMoveMode] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
 
   const timeOfDay = getTimeOfDay(round);
   const canvasBg = getCanvasBgColor(map, timeOfDay);
   const headerColors = getHeaderColors(map, timeOfDay);
+
+  const updateDebugInfo = useCallback(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+
+    if (!canvas || !container) return;
+
+    const rect = canvas.getBoundingClientRect();
+
+    setDebugInfo({
+      containerWidth: Math.round(container.clientWidth),
+      containerHeight: Math.round(container.clientHeight),
+      canvasWidth: canvas.width,
+      canvasHeight: canvas.height,
+      rectWidth: Math.round(rect.width),
+      rectHeight: Math.round(rect.height),
+      dpr: window.devicePixelRatio,
+      cameraX: Math.round(cameraRef.current.x),
+      cameraY: Math.round(cameraRef.current.y),
+      cameraZoom: Number(cameraRef.current.zoom.toFixed(6)),
+    });
+  }, []);
 
   const getCanvasPos = useCallback((e: React.PointerEvent) => {
     const canvas = canvasRef.current;
@@ -98,26 +137,43 @@ export default function DrawingPage({
   const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
+
     if (!canvas || !container) return;
 
     canvas.width = container.clientWidth;
     canvas.height = container.clientHeight;
-    cameraRef.current.setViewport(canvas.width, canvas.height);
+
+    cameraRef.current.setViewport(
+      canvas.width,
+      canvas.height
+    );
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const renderer = new Renderer(ctx, CANVAS_WIDTH, CANVAS_HEIGHT);
+    const renderer = new Renderer(
+      ctx,
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT
+    );
+
     const pointer = new Pointer();
 
     rendererRef.current = renderer;
+
     drawingEngineRef.current = new DrawingEngine(
       cameraRef.current,
       renderer,
       pointer
     );
-    drawingEngineRef.current.clear(CANVAS_WIDTH, CANVAS_HEIGHT);
-  }, []);
+
+    drawingEngineRef.current.clear(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT
+    );
+
+    updateDebugInfo();
+  }, [updateDebugInfo]);
 
   useEffect(() => {
     initCanvas();
@@ -125,17 +181,27 @@ export default function DrawingPage({
     const resize = () => {
       const canvas = canvasRef.current;
       const container = containerRef.current;
+
       if (!canvas || !container) return;
 
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
-      cameraRef.current.setViewport(canvas.width, canvas.height);
+
+      cameraRef.current.setViewport(
+        canvas.width,
+        canvas.height
+      );
+
       drawingEngineRef.current?.render();
+      updateDebugInfo();
     };
 
     window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, [initCanvas]);
+
+    return () => {
+      window.removeEventListener("resize", resize);
+    };
+  }, [initCanvas, updateDebugInfo]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -145,40 +211,68 @@ export default function DrawingPage({
       if (event.ctrlKey) event.preventDefault();
     };
 
-    canvas.addEventListener("wheel", preventBrowserZoom, { passive: false });
-    return () => canvas.removeEventListener("wheel", preventBrowserZoom);
+    canvas.addEventListener(
+      "wheel",
+      preventBrowserZoom,
+      { passive: false }
+    );
+
+    return () => {
+      canvas.removeEventListener(
+        "wheel",
+        preventBrowserZoom
+      );
+    };
   }, []);
 
   // On mount: restore previous snapshot so strokes accumulate across rounds
   useEffect(() => {
     if (prevPageUrl) {
       const img = new Image();
-      img.onload = () => drawingEngineRef.current?.drawImage(img, 0, 0);
+
+      img.onload = () => {
+        drawingEngineRef.current?.drawImage(img, 0, 0);
+      };
+
       img.src = prevPageUrl;
     } else {
-      drawingEngineRef.current?.clear(CANVAS_WIDTH, CANVAS_HEIGHT);
+      drawingEngineRef.current?.clear(
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT
+      );
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerDown = useCallback((
+    e: React.PointerEvent<HTMLCanvasElement>
+  ) => {
     e.preventDefault();
-    (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+
+    (e.target as HTMLCanvasElement).setPointerCapture(
+      e.pointerId
+    );
 
     if (moveMode) {
       const point = getCanvasPos(e);
-      if (point) cameraControllerRef.current.startMove(point);
-    } else {
-      const pos = getCanvasPos(e);
-      if (!pos) return;
 
-      setIsDrawing(true);
+      if (point) {
+        cameraControllerRef.current.startMove(point);
+      }
 
-      drawingEngineRef.current?.startDrawing(pos);
+      return;
     }
+
+    const pos = getCanvasPos(e);
+    if (!pos) return;
+
+    setIsDrawing(true);
+    drawingEngineRef.current?.startDrawing(pos);
   }, [getCanvasPos, moveMode]);
 
-  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = useCallback((
+    e: React.PointerEvent<HTMLCanvasElement>
+  ) => {
     e.preventDefault();
 
     if (moveMode) {
@@ -187,40 +281,54 @@ export default function DrawingPage({
 
       cameraControllerRef.current.move(point);
       drawingEngineRef.current?.render();
-    } else {
-      if (!isDrawing) return;
+      updateDebugInfo();
 
-      const pos = getCanvasPos(e);
-if (!pos) return;
-console.log("DRAW", {
-  x: Math.round(pos.x),
-  y: Math.round(pos.y),
-  zoom: cameraRef.current.zoom,
-  cameraX: Math.round(cameraRef.current.x),
-  cameraY: Math.round(cameraRef.current.y),
-});
-
-
-
-drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
+      return;
     }
-  }, [isDrawing, getCanvasPos, color, brushSize, isEraser, moveMode]);
 
-  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+
+    const pos = getCanvasPos(e);
+    if (!pos) return;
+
+    drawingEngineRef.current?.draw(
+      pos,
+      color,
+      brushSize,
+      isEraser
+    );
+  }, [
+    isDrawing,
+    getCanvasPos,
+    color,
+    brushSize,
+    isEraser,
+    moveMode,
+    updateDebugInfo,
+  ]);
+
+  const handlePointerUp = useCallback((
+    e: React.PointerEvent<HTMLCanvasElement>
+  ) => {
     e.preventDefault();
+
     if (moveMode) {
       cameraControllerRef.current.endMove();
     } else {
       drawingEngineRef.current?.endDrawing();
-
       setIsDrawing(false);
     }
-  }, [moveMode]);
 
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+    updateDebugInfo();
+  }, [moveMode, updateDebugInfo]);
+
+  const handleWheel = useCallback((
+    e: React.WheelEvent<HTMLCanvasElement>
+  ) => {
     if (!e.ctrlKey) return;
 
     e.preventDefault();
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -230,29 +338,33 @@ drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
       cameraRef.current
     );
 
-    cameraControllerRef.current.zoomAt(point, e.deltaY < 0 ? 1.1 : 0.9);
+    cameraControllerRef.current.zoomAt(
+      point,
+      e.deltaY < 0 ? 1.1 : 0.9
+    );
+
     drawingEngineRef.current?.render();
-  }, []);
+    updateDebugInfo();
+  }, [updateDebugInfo]);
 
   const handleClear = () => {
-  const canvas = canvasRef.current;
-  if (!canvas) return;
+    drawingEngineRef.current?.clear(
+      CANVAS_WIDTH,
+      CANVAS_HEIGHT
+    );
 
-  drawingEngineRef.current?.clear(
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT
-  );
-};
+    updateDebugInfo();
+  };
 
   const handleSubmit = () => {
     const renderer = rendererRef.current;
     if (!renderer) return;
 
-    // Composite bg color + strokes into an offscreen canvas so the snapshot
-    // is fully opaque and ReviewPage shows the correct appearance.
     const flat = document.createElement('canvas');
+
     flat.width = CANVAS_WIDTH;
     flat.height = CANVAS_HEIGHT;
+
     const context = flat.getContext('2d');
     if (!context) return;
 
@@ -260,25 +372,44 @@ drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
     onSubmit(flat.toDataURL('image/png'));
   };
 
-  const timeLabel = timeOfDay === 'day' ? '白天' : timeOfDay === 'dusk' ? '黃昏' : '夜晚';
+  const timeLabel =
+    timeOfDay === 'day'
+      ? '白天'
+      : timeOfDay === 'dusk'
+        ? '黃昏'
+        : '夜晚';
 
   return (
-    <div className="flex flex-col w-full h-screen" style={{ touchAction: 'none' }}>
+    <div
+      className="flex flex-col w-full h-screen"
+      style={{ touchAction: 'none' }}
+    >
       {/* Header */}
       <div
         className="flex items-center justify-between px-3 py-2 flex-shrink-0 backdrop-blur-sm"
-        style={{ background: headerColors.bg, color: headerColors.text, paddingTop: 'calc(0.5rem + env(safe-area-inset-top))' }}
+        style={{
+          background: headerColors.bg,
+          color: headerColors.text,
+          paddingTop: 'calc(0.5rem + env(safe-area-inset-top))',
+        }}
       >
         <div className="min-w-0">
-          <div className="font-bold text-sm leading-tight truncate">{playerName} 的回合</div>
-          <div className="text-xs opacity-70">第 {round}/{totalRounds} 頁 · {timeLabel}</div>
+          <div className="font-bold text-sm leading-tight truncate">
+            {playerName} 的回合
+          </div>
+
+          <div className="text-xs opacity-70">
+            第 {round}/{totalRounds} 頁 · {timeLabel}
+          </div>
         </div>
 
         {/* Progress bar inside header */}
         <div className="flex-1 mx-3 h-1.5 rounded-full bg-white/20 overflow-hidden">
           <div
             className="h-full bg-white/70 rounded-full transition-all duration-500"
-            style={{ width: `${(round / totalRounds) * 100}%` }}
+            style={{
+              width: `${(round / totalRounds) * 100}%`,
+            }}
           />
         </div>
 
@@ -293,18 +424,21 @@ drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
               上頁
             </button>
           )}
+
           <button
             onClick={handleClear}
             className="text-xs px-2.5 py-1.5 rounded-lg border border-white/25 bg-white/10 active:bg-white/20"
           >
             清除
           </button>
+
           <button
             onClick={handleSubmit}
             className="text-xs px-2.5 py-1.5 rounded-lg bg-green-500 text-white font-semibold flex items-center gap-1 active:bg-green-400"
           >
             <Check size={13} /> 送出
           </button>
+
           <button
             onClick={onDevReview}
             title="DEV: 直接查看成果"
@@ -316,7 +450,10 @@ drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
       </div>
 
       {/* Canvas — fills everything below header */}
-      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+      <div
+        ref={containerRef}
+        className="flex-1 relative overflow-hidden"
+      >
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full"
@@ -334,10 +471,37 @@ drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
           onWheel={handleWheel}
         />
 
+        {debugInfo && (
+          <div className="absolute top-2 left-2 z-30 pointer-events-none rounded-lg bg-black/70 px-3 py-2 font-mono text-xs text-white/90">
+            <div>
+              container: {debugInfo.containerWidth} × {debugInfo.containerHeight}
+            </div>
+            <div>
+              canvas: {debugInfo.canvasWidth} × {debugInfo.canvasHeight}
+            </div>
+            <div>
+              rect: {debugInfo.rectWidth} × {debugInfo.rectHeight}
+            </div>
+            <div>
+              dpr: {debugInfo.dpr}
+            </div>
+            <div>
+              camera: {debugInfo.cameraX}, {debugInfo.cameraY}
+            </div>
+            <div>
+              zoom: {debugInfo.cameraZoom}
+            </div>
+          </div>
+        )}
+
         {/* Previous page overlay */}
         {showPrev && prevPageUrl && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
-            <img src={prevPageUrl} className="max-w-full max-h-full object-contain" alt="上一頁" />
+            <img
+              src={prevPageUrl}
+              className="max-w-full max-h-full object-contain"
+              alt="上一頁"
+            />
           </div>
         )}
       </div>
@@ -345,22 +509,37 @@ drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
       {/* Tool FAB */}
       <div
         className="fixed right-4 z-20"
-        style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+        style={{
+          bottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
+        }}
       >
         {toolOpen && (
           <div className="mb-3 bg-slate-900/95 backdrop-blur-sm rounded-2xl p-4 shadow-2xl border border-slate-700/50 min-w-[220px]">
             {/* Color picker */}
             <div className="mb-3">
-              <div className="text-slate-400 text-xs mb-2 uppercase tracking-wider">顏色</div>
+              <div className="text-slate-400 text-xs mb-2 uppercase tracking-wider">
+                顏色
+              </div>
+
               <div className="grid grid-cols-5 gap-1.5">
                 {COLORS.map(c => (
                   <button
                     key={c}
-                    onClick={() => { setColor(c); setIsEraser(false); }}
+                    onClick={() => {
+                      setColor(c);
+                      setIsEraser(false);
+                    }}
                     className={`w-9 h-9 rounded-lg border-2 transition-transform active:scale-90 ${
-                      color === c && !isEraser ? 'border-white scale-110' : 'border-transparent'
+                      color === c && !isEraser
+                        ? 'border-white scale-110'
+                        : 'border-transparent'
                     }`}
-                    style={{ backgroundColor: c, boxShadow: c === '#ffffff' ? 'inset 0 0 0 1px #64748b' : undefined }}
+                    style={{
+                      backgroundColor: c,
+                      boxShadow: c === '#ffffff'
+                        ? 'inset 0 0 0 1px #64748b'
+                        : undefined,
+                    }}
                   />
                 ))}
               </div>
@@ -368,7 +547,10 @@ drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
 
             {/* Brush size */}
             <div className="mb-3">
-              <div className="text-slate-400 text-xs mb-2 uppercase tracking-wider">筆刷大小 ({brushSize})</div>
+              <div className="text-slate-400 text-xs mb-2 uppercase tracking-wider">
+                筆刷大小 ({brushSize})
+              </div>
+
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setBrushSize(s => Math.max(1, s - 2))}
@@ -376,12 +558,16 @@ drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
                 >
                   <Minus size={14} />
                 </button>
+
                 <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-sky-400 rounded-full transition-all"
-                    style={{ width: `${(brushSize / 30) * 100}%` }}
+                    style={{
+                      width: `${(brushSize / 30) * 100}%`,
+                    }}
                   />
                 </div>
+
                 <button
                   onClick={() => setBrushSize(s => Math.min(30, s + 2))}
                   className="w-8 h-8 rounded-lg bg-slate-700 text-white flex items-center justify-center active:bg-slate-600"
@@ -393,19 +579,31 @@ drawingEngineRef.current?.draw(pos, color, brushSize, isEraser);
 
             {/* Eraser */}
             <button
-              onClick={() => { setIsEraser(e => !e); setMoveMode(false); }}
+              onClick={() => {
+                setIsEraser(e => !e);
+                setMoveMode(false);
+              }}
               className={`w-full flex items-center gap-2 py-2 px-3 rounded-xl text-sm font-medium transition-colors ${
-                isEraser ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-slate-700/60 text-slate-300 border border-slate-600/30'
+                isEraser
+                  ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                  : 'bg-slate-700/60 text-slate-300 border border-slate-600/30'
               }`}
             >
               <Eraser size={16} />
               橡皮擦 {isEraser ? '(使用中)' : ''}
             </button>
+
             {/* Move Mode */}
             <button
-              onClick={() => { setMoveMode(m => !m); setIsEraser(false); setIsDrawing(false); }}
+              onClick={() => {
+                setMoveMode(m => !m);
+                setIsEraser(false);
+                setIsDrawing(false);
+              }}
               className={`w-full mt-2 flex items-center gap-2 py-2 px-3 rounded-xl text-sm font-medium transition-colors ${
-                moveMode ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-slate-700/60 text-slate-300 border border-slate-600/30'
+                moveMode
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                  : 'bg-slate-700/60 text-slate-300 border border-slate-600/30'
               }`}
             >
               <Flag size={16} />
