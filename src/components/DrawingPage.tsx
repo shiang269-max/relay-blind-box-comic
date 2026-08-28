@@ -110,7 +110,6 @@ export default function DrawingPage({
   const [color, setColor] = useState("#000000");
   const [brushSize, setBrushSize] = useState(6);
   const [isEraser, setIsEraser] = useState(false);
-  const [toolOpen, setToolOpen] = useState(false);
   const [showPrev, setShowPrev] = useState(false);
   const [moveMode, setMoveMode] = useState(false);
 
@@ -168,11 +167,7 @@ export default function DrawingPage({
     if (!ctx) return;
 
     if (!rendererRef.current || !drawingEngineRef.current) {
-      const renderer = new Renderer(
-        ctx,
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT
-      );
+      const renderer = new Renderer(ctx, CANVAS_WIDTH, CANVAS_HEIGHT);
       rendererRef.current = renderer;
       drawingEngineRef.current = new DrawingEngine(
         cameraRef.current,
@@ -358,10 +353,7 @@ export default function DrawingPage({
         : "夜晚";
 
   return (
-    <div
-      className="flex flex-col w-full h-screen"
-      style={{ touchAction: "none" }}
-    >
+    <div className="flex flex-col w-full h-screen" style={{ touchAction: "none" }}>
       <div
         className="flex items-center justify-between px-3 py-2 flex-shrink-0 backdrop-blur-sm"
         style={{
@@ -371,19 +363,12 @@ export default function DrawingPage({
         }}
       >
         <div className="min-w-0">
-          <div className="font-bold text-sm leading-tight truncate">
-            {playerName} 的回合
-          </div>
-          <div className="text-xs opacity-70">
-            第 {round}/{totalRounds} 頁 · {timeLabel}
-          </div>
+          <div className="font-bold text-sm leading-tight truncate">{playerName} 的回合</div>
+          <div className="text-xs opacity-70">第 {round}/{totalRounds} 頁 · {timeLabel}</div>
         </div>
 
         <div className="flex-1 mx-3 h-1.5 rounded-full bg-white/20 overflow-hidden">
-          <div
-            className="h-full bg-white/70 rounded-full transition-all duration-500"
-            style={{ width: `${(round / totalRounds) * 100}%` }}
-          />
+          <div className="h-full bg-white/70 rounded-full transition-all duration-500" style={{ width: `${(round / totalRounds) * 100}%` }} />
         </div>
 
         <div className="flex gap-1.5 flex-shrink-0">
@@ -398,39 +383,16 @@ export default function DrawingPage({
             </button>
           )}
 
-          <button
-            onClick={handleClear}
-            className="text-xs px-2.5 py-1.5 rounded-lg border border-white/25 bg-white/10 active:bg-white/20"
-          >
-            清除
-          </button>
-
-          <button
-            onClick={handleSubmit}
-            className="text-xs px-2.5 py-1.5 rounded-lg bg-green-500 text-white font-semibold flex items-center gap-1 active:bg-green-400"
-          >
-            <Check size={13} />
-            送出
-          </button>
-
-          <button
-            onClick={onDevReview}
-            title="DEV: 直接查看成果"
-            className="text-xs px-2 py-1.5 rounded-lg border border-white/25 bg-white/10"
-          >
-            成果
-          </button>
+          <button onClick={handleClear} className="text-xs px-2.5 py-1.5 rounded-lg border border-white/25 bg-white/10 active:bg-white/20">清除</button>
+          <button onClick={handleSubmit} className="text-xs px-2.5 py-1.5 rounded-lg bg-green-500 text-white font-semibold flex items-center gap-1 active:bg-green-400"><Check size={13} />送出</button>
+          <button onClick={onDevReview} title="DEV: 直接查看成果" className="text-xs px-2 py-1.5 rounded-lg border border-white/25 bg-white/10">成果</button>
         </div>
       </div>
 
-      <div
-        ref={containerRef}
-        className="relative flex-1 min-h-0 overflow-hidden"
-        style={{ background: canvasBg }}
-      >
+      <div ref={containerRef} className="flex-1 relative overflow-hidden" style={{ background: canvasBg }}>
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 block w-full h-full"
+          className="absolute inset-0 w-full h-full"
           style={{ touchAction: "none" }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -440,80 +402,19 @@ export default function DrawingPage({
         />
 
         {showPrev && prevPageUrl && (
-          <img
-            src={prevPageUrl}
-            alt="上一頁"
-            className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-80"
-          />
+          <img src={prevPageUrl} alt="上一頁" className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-80" />
         )}
       </div>
 
-      <div
-        className="flex items-center gap-2 p-2 flex-shrink-0 overflow-x-auto bg-slate-950/85 text-white"
-        style={{
-          paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
-        }}
-      >
-        <button
-          onClick={() => {
-            setMoveMode((value) => !value);
-            setIsEraser(false);
-          }}
-          className={`min-h-11 min-w-11 rounded-xl flex items-center justify-center ${
-            moveMode ? "bg-blue-500" : "bg-white/10"
-          }`}
-          title="移動畫面"
-        >
-          <Flag size={18} />
-        </button>
-
-        <button
-          onClick={() => {
-            setIsEraser((value) => !value);
-            setMoveMode(false);
-          }}
-          className={`min-h-11 min-w-11 rounded-xl flex items-center justify-center ${
-            isEraser ? "bg-orange-500" : "bg-white/10"
-          }`}
-          title="橡皮擦"
-        >
-          <Eraser size={18} />
-        </button>
-
-        <button
-          onClick={() => setBrushSize((value) => Math.max(1, value - 2))}
-          className="min-h-11 min-w-10 rounded-xl bg-white/10"
-        >
-          <Minus size={18} />
-        </button>
-
+      <div className="flex items-center gap-2 p-2 flex-shrink-0 overflow-x-auto bg-slate-950/85 text-white" style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))" }}>
+        <button onClick={() => { setMoveMode((value) => !value); setIsEraser(false); }} className={`min-h-11 min-w-11 rounded-xl flex items-center justify-center ${moveMode ? "bg-blue-500" : "bg-white/10"}`} title="移動畫面"><Flag size={18} /></button>
+        <button onClick={() => { setIsEraser((value) => !value); setMoveMode(false); }} className={`min-h-11 min-w-11 rounded-xl flex items-center justify-center ${isEraser ? "bg-orange-500" : "bg-white/10"}`} title="橡皮擦"><Eraser size={18} /></button>
+        <button onClick={() => setBrushSize((value) => Math.max(1, value - 2))} className="min-h-11 min-w-10 rounded-xl bg-white/10"><Minus size={18} /></button>
         <span className="min-w-8 text-center text-sm">{brushSize}</span>
-
-        <button
-          onClick={() => setBrushSize((value) => Math.min(100, value + 2))}
-          className="min-h-11 min-w-10 rounded-xl bg-white/10"
-        >
-          <Plus size={18} />
-        </button>
-
+        <button onClick={() => setBrushSize((value) => Math.min(100, value + 2))} className="min-h-11 min-w-10 rounded-xl bg-white/10"><Plus size={18} /></button>
         <Palette size={18} />
-
         {COLORS.map((item) => (
-          <button
-            key={item}
-            onClick={() => {
-              setColor(item);
-              setIsEraser(false);
-              setMoveMode(false);
-            }}
-            className={`h-9 w-9 shrink-0 rounded-full border-2 ${
-              color === item && !isEraser
-                ? "border-white scale-110"
-                : "border-white/25"
-            }`}
-            style={{ backgroundColor: item }}
-            aria-label={`選擇顏色 ${item}`}
-          />
+          <button key={item} onClick={() => { setColor(item); setIsEraser(false); setMoveMode(false); }} className={`h-9 w-9 shrink-0 rounded-full border-2 ${color === item && !isEraser ? "border-white scale-110" : "border-white/25"}`} style={{ backgroundColor: item }} aria-label={`選擇顏色 ${item}`} />
         ))}
       </div>
     </div>
