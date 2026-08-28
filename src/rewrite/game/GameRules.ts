@@ -2,7 +2,7 @@ import type {
   Player,
   RoomState,
 } from "../domain";
-import { getGameMode } from "./GameMode";
+import { getGameFlow } from "./getGameFlow";
 
 export function orderPlayers(
   players: Record<string, Player> | undefined
@@ -42,48 +42,38 @@ export function canSubmitRound(
   return room.currentPlayerId === playerId;
 }
 
+/**
+ * 寫入目前繪圖結果後，由模式流程決定下一個狀態。
+ *
+ * RoomRepository 不再知道 30 頁、上一頁、輪替玩家等模式規則。
+ */
 export function nextRoundState(
   room: RoomState,
   pageDataUrl: string
 ): RoomState | null {
   if (room.phase !== "playing") return null;
-  if (!room.currentPlayerId) return null;
 
-  const mode = getGameMode(room.mode);
   const players = orderPlayers(room.players);
   if (players.length === 0) return null;
 
-  const currentIndex = players.findIndex(
-    (player) => player.id === room.currentPlayerId
-  );
+  const flow = getGameFlow(room.mode);
 
-  if (currentIndex < 0) return null;
+  const next = flow.getNextState({
+    currentRound: room.currentRound,
+    currentPlayerId: room.currentPlayerId,
+    playerIds: players.map((player) => player.id),
+  });
 
   const pages = {
     ...(room.pages ?? {}),
     [String(room.currentRound)]: pageDataUrl,
   };
 
-  const isLastRound =
-    mode.totalRounds !== null &&
-    room.currentRound >= mode.totalRounds;
-
-  if (isLastRound) {
-    return {
-      ...room,
-      pages,
-      currentPlayerId: null,
-      phase: "review",
-    };
-  }
-
-  const nextPlayer =
-    players[(currentIndex + 1) % players.length];
-
   return {
     ...room,
     pages,
-    currentRound: room.currentRound + 1,
-    currentPlayerId: nextPlayer.id,
+    phase: next.phase,
+    currentRound: next.currentRound,
+    currentPlayerId: next.currentPlayerId,
   };
 }
