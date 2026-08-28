@@ -16,6 +16,8 @@ import {
   watchRoom,
 } from "./data/RoomRepository";
 
+const DISCONNECT_GRACE_MS = 10_000;
+
 export interface RoomSession {
   roomId: string;
   playerId: string;
@@ -49,24 +51,35 @@ export function useRoom(session: RoomSession) {
   }, [session.playerId, session.playerName, session.roomId]);
 
   /**
-   * 當目前輪到的玩家因斷線或離開而被 Presence 移除時，
-   * 任何在線客戶端都可以觸發同一個 transaction。
-   * Transaction 只會成功一次，因此多人同時偵測不會造成重複跳過。
+   * 手機網路短暫波動不能立刻把目前玩家的繪圖權轉走。
+   * Presence 先把離線玩家移除，但會等待一段寬限時間；
+   * 若玩家在期間重新連線，Room State 恢復後 cleanup 會取消計時器。
+   * 主動離開則由 leaveRoom transaction 立即處理，不走這個等待流程。
    */
   useEffect(() => {
     if (!room) return;
     if (room.game.phase !== "playing") return;
 
     const currentPlayerId = room.game.currentPlayerId;
-    if (!currentPlayerId) {
-      void recoverMissingCurrentPlayerTurn(session.roomId);
-      return;
-    }
+    const currentPlayerExists = Boolean(
+      currentPlayerId && room.players[currentPlayerId]
+    );
 
-    if (!room.players[currentPlayerId]) {
+    if (currentPlayerExists) return;
+
+    const timeoutId = window.setTimeout(() => {
       void recoverMissingCurrentPlayerTurn(session.roomId);
-    }
-  }, [room, session.roomId]);
+    }, DISCONNECT_GRACE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    room?.game.currentPlayerId,
+    room?.game.phase,
+    room?.players,
+    session.roomId,
+  ]);
 
   const players = useMemo(() => {
     return getOrderedPlayers(room);
