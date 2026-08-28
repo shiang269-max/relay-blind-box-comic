@@ -13,7 +13,9 @@ import {
   type Player,
   type RoomState,
 } from "../domain";
+import { createGameState } from "../game/GameState";
 import type { GameModeId } from "../game/GameMode";
+import { createRelayModeState } from "../game/RelayModeState";
 import {
   canStartGame,
   canSubmitRound,
@@ -70,14 +72,17 @@ export async function startGame(
 
       if (!hostId) return;
 
+      const game = createGameState(mode, hostId);
+      game.phase = "playing";
+      game.currentTurn = 1;
+
+      if (mode === "relay-30") {
+        game.modeState = createRelayModeState();
+      }
+
       return {
-        ...(current ?? {}),
         map,
-        mode,
-        phase: "playing",
-        currentRound: 1,
-        currentPlayerId: hostId,
-        pages: {},
+        game,
         createdAt: current?.createdAt ?? Date.now(),
         players,
       } satisfies RoomState;
