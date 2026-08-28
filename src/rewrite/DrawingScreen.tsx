@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Eraser, Minus, Move, Palette, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { getBackgroundColor, getTimeOfDay, WORLD_HEIGHT, WORLD_WIDTH, type MapType } from "./domain";
+import { getTimeOfDay, WORLD_HEIGHT, WORLD_WIDTH, type MapType } from "./domain";
 import type { GameMode } from "./game/GameMode";
 import { DrawingSession } from "./drawing/DrawingSession";
 import { DrawingSurface, type Brush } from "./drawing/DrawingSurface";
@@ -43,7 +43,6 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
   const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved">("idle");
 
   const time = getTimeOfDay(round);
-  const background = getBackgroundColor(map, time);
   const brush = useCallback((): Brush => ({ color, size, eraser }), [color, size, eraser]);
 
   const resize = useCallback(() => {
@@ -97,7 +96,12 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
     setAutosaveState("idle");
     setSubmitError(null);
 
-    const surface = new DrawingSurface(canvas, { worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT, background });
+    const surface = new DrawingSurface(canvas, {
+      worldWidth: WORLD_WIDTH,
+      worldHeight: WORLD_HEIGHT,
+      map,
+      time,
+    });
     const session = new DrawingSession(surface);
     const adapter = new RelayPageDrawingAdapter({ roomId, pageIndex, persistence: new FirebaseDrawingPersistence() });
     const lifecycle = new RelayPageDrawingLifecycle(session, adapter);
@@ -131,7 +135,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
       if (sessionRef.current === session) sessionRef.current = null;
       if (lifecycleRef.current === lifecycle) lifecycleRef.current = null;
     };
-  }, [background, pageIndex, previousPage, resize, roomId]);
+  }, [map, pageIndex, previousPage, resize, roomId, time]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -183,7 +187,9 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
         return;
       }
 
-      await lifecycle.clear();
+      // 成功送出後不立即清除 Firebase 暫存。
+      // 下一回合已由 room/pageIndex 切換；保留上一頁快照可避免非同步切換時
+      // 因本地清除而造成「內容突然消失」的觀感，也提供送出後的恢復保護。
     } catch (error) {
       console.error("送出回合失敗", error);
       setSubmitError("送出失敗，作品暫存已保留，可以重新嘗試。");
@@ -198,7 +204,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
   const autosaveLabel = autosaveState === "saving" ? "自動儲存中" : autosaveState === "saved" ? "已自動儲存" : "";
 
   return (
-    <div className="relative flex w-screen flex-col overflow-hidden text-white" style={{ height: "var(--app-height, 100svh)", background, paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <div className="relative flex w-screen flex-col overflow-hidden text-white" style={{ height: "var(--app-height, 100svh)", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
       <GameAtmosphere map={map} round={round} />
       <header className="relative z-10 shrink-0 border-b border-white/10 bg-slate-950/35 px-3 py-2 backdrop-blur-xl">
         <div className="flex items-center gap-3">
