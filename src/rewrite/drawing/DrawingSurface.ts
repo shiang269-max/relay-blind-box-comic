@@ -12,11 +12,18 @@ export interface SurfaceOptions {
   background: string;
 }
 
+/**
+ * 唯一負責畫布座標與渲染的 Surface。
+ *
+ * 座標規則固定為：
+ * CSS screen space -> Camera -> world space。
+ * Canvas 的 device pixel ratio 只存在 render 層，不參與 input 計算。
+ */
 export class DrawingSurface {
   readonly camera: Camera;
   private readonly worldCanvas: HTMLCanvasElement;
   private readonly worldContext: CanvasRenderingContext2D;
-  private viewportContext: CanvasRenderingContext2D;
+  private readonly viewportContext: CanvasRenderingContext2D;
   private cssWidth = 1;
   private cssHeight = 1;
   private dpr = 1;
@@ -60,11 +67,12 @@ export class DrawingSurface {
 
   eventToScreen(event: PointerEvent | WheelEvent): Point {
     const rect = this.viewportCanvas.getBoundingClientRect();
-    const scaleX = this.cssWidth / Math.max(1, rect.width);
-    const scaleY = this.cssHeight / Math.max(1, rect.height);
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
+
     return {
-      x: (event.clientX - rect.left) * scaleX,
-      y: (event.clientY - rect.top) * scaleY,
+      x: (event.clientX - rect.left) * this.cssWidth / width,
+      y: (event.clientY - rect.top) * this.cssHeight / height,
     };
   }
 
@@ -74,6 +82,7 @@ export class DrawingSurface {
 
   startStroke(point: Point, brush: Brush): boolean {
     if (!this.camera.isInsideWorld(point)) return false;
+
     this.lastPoint = point;
     this.drawDot(point, brush);
     this.render();
@@ -100,6 +109,7 @@ export class DrawingSurface {
     this.worldContext.lineTo(to.x, to.y);
     this.worldContext.stroke();
     this.worldContext.restore();
+
     this.render();
   }
 
@@ -108,12 +118,8 @@ export class DrawingSurface {
   }
 
   clear(): void {
-    this.worldContext.clearRect(
-      0,
-      0,
-      this.options.worldWidth,
-      this.options.worldHeight
-    );
+    this.endStroke();
+    this.worldContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
     this.render();
   }
 
@@ -127,20 +133,17 @@ export class DrawingSurface {
       image.src = source;
     });
 
-    this.clear();
-    this.worldContext.drawImage(
-      image,
-      0,
-      0,
-      this.options.worldWidth,
-      this.options.worldHeight
-    );
+    this.endStroke();
+    this.worldContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
+    this.worldContext.drawImage(image, 0, 0, this.options.worldWidth, this.options.worldHeight);
     this.render();
   }
 
   render(): void {
     const ctx = this.viewportContext;
 
+    // Device pixels are handled only by the render transform.
+    // Input and Camera remain entirely in CSS pixels.
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
     ctx.fillStyle = this.options.background;
@@ -154,12 +157,14 @@ export class DrawingSurface {
       -this.camera.x * this.dpr * this.camera.zoom,
       -this.camera.y * this.dpr * this.camera.zoom
     );
-
     ctx.drawImage(this.worldCanvas, 0, 0);
+
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   exportPng(): string {
+    this.endStroke();
+
     const output = document.createElement("canvas");
     output.width = this.options.worldWidth;
     output.height = this.options.worldHeight;
