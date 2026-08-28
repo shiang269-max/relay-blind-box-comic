@@ -60,10 +60,22 @@ export function getDefaultGameMode(): GameModeId {
   return DEFAULT_GAME_MODE;
 }
 
-export function getTimeOfDay(round: number): TimeOfDay {
-  const cycle = ((round - 1) % 6) + 1;
-  if (cycle <= 2) return "day";
-  if (cycle <= 4) return "dusk";
+/**
+ * 時段不是單純依頁數，而是依「完整玩家輪替」推進。
+ *
+ * 2 人：1-2 白天、3-4 黃昏、5-6 夜晚
+ * 3 人：1-3 白天、4-6 黃昏、7-9 夜晚
+ * 1 人測試：每完成一頁切換下一時段
+ *
+ * 這樣每一位玩家都會經歷同一個時段，不會有人固定只玩白天、
+ * 另一位固定只玩夜晚。
+ */
+export function getTimeOfDay(round: number, playerCount = 1): TimeOfDay {
+  const turnsPerPhase = Math.max(1, Math.floor(playerCount));
+  const phaseIndex = Math.floor(Math.max(0, round - 1) / turnsPerPhase) % 3;
+
+  if (phaseIndex === 0) return "day";
+  if (phaseIndex === 1) return "dusk";
   return "night";
 }
 
