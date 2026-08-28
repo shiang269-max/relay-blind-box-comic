@@ -22,6 +22,7 @@ export interface RoomSession {
   roomId: string;
   playerId: string;
   playerName: string;
+  createIfMissing: boolean;
 }
 
 export function useRoom(session: RoomSession) {
@@ -38,7 +39,8 @@ export function useRoom(session: RoomSession) {
   }, [session.roomId]);
 
   useEffect(() => {
-    if (!session.playerName) return;
+    if (!session.playerName || loading) return;
+    if (!room && !session.createIfMissing) return;
 
     const player: Player = {
       id: session.playerId,
@@ -48,14 +50,15 @@ export function useRoom(session: RoomSession) {
 
     void upsertPlayer(session.roomId, player);
     void startPlayerPresence(session.roomId, session.playerId);
-  }, [session.playerId, session.playerName, session.roomId]);
+  }, [
+    loading,
+    room,
+    session.createIfMissing,
+    session.playerId,
+    session.playerName,
+    session.roomId,
+  ]);
 
-  /**
-   * 手機網路短暫波動不能立刻把目前玩家的繪圖權轉走。
-   * Presence 先把離線玩家移除，但會等待一段寬限時間；
-   * 若玩家在期間重新連線，Room State 恢復後 cleanup 會取消計時器。
-   * 主動離開則由 leaveRoom transaction 立即處理，不走這個等待流程。
-   */
   useEffect(() => {
     if (!room) return;
     if (room.game.phase !== "playing") return;
@@ -81,50 +84,29 @@ export function useRoom(session: RoomSession) {
     session.roomId,
   ]);
 
-  const players = useMemo(() => {
-    return getOrderedPlayers(room);
-  }, [room]);
-
-  const isHost = useMemo(() => {
-    return isRoomHost(room, session.playerId);
-  }, [room, session.playerId]);
+  const players = useMemo(() => getOrderedPlayers(room), [room]);
+  const isHost = useMemo(
+    () => isRoomHost(room, session.playerId),
+    [room, session.playerId]
+  );
 
   const start = useCallback(
     async (map: MapType) => {
-      await startGame(
-        session.roomId,
-        session.playerId,
-        map
-      );
+      await startGame(session.roomId, session.playerId, map);
     },
     [session.playerId, session.roomId]
   );
 
   const submit = useCallback(
     async (pageDataUrl: string): Promise<boolean> => {
-      return submitRound(
-        session.roomId,
-        session.playerId,
-        pageDataUrl
-      );
+      return submitRound(session.roomId, session.playerId, pageDataUrl);
     },
     [session.playerId, session.roomId]
   );
 
   const leave = useCallback(async () => {
-    await leaveRoom(
-      session.roomId,
-      session.playerId
-    );
+    await leaveRoom(session.roomId, session.playerId);
   }, [session.playerId, session.roomId]);
 
-  return {
-    room,
-    loading,
-    players,
-    isHost,
-    start,
-    submit,
-    leave,
-  };
+  return { room, loading, players, isHost, start, submit, leave };
 }
