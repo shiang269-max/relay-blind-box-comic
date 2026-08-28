@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { set, ref } from "firebase/database";
-import { db } from "../lib/firebase";
 import {
-  generateComicId,
   generatePlayerId,
   generateRoomId,
   type Comic,
@@ -66,18 +63,6 @@ function AppRewrite() {
     window.location.hash = normalized;
   }, []);
 
-  const saveComic = useCallback(async (title: string) => {
-    if (!room?.pages) return;
-
-    const id = generateComicId();
-    await set(ref(db, `comics/${id}`), {
-      id,
-      title: title.trim() || "未命名漫畫",
-      createdAt: Date.now(),
-      pages: room.pages,
-    });
-  }, [room?.pages]);
-
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
@@ -105,7 +90,10 @@ function AppRewrite() {
     );
   }
 
-  if (screen === "game" && (room?.phase === "playing" || room?.phase === "review")) {
+  if (
+    screen === "game" &&
+    (room?.game.phase === "playing" || room?.game.phase === "review")
+  ) {
     return (
       <GameRouter
         room={room}
