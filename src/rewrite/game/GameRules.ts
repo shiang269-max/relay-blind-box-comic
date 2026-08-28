@@ -21,8 +21,7 @@ export function orderPlayers(
 }
 
 export function getHostId(
-  room: RoomState | null
-): string | null {
+  room: RoomState | null): string | null {
   return orderPlayers(room?.players)[0]?.id ?? null;
 }
 
@@ -44,6 +43,35 @@ export function canSubmitRound(
   if (room.game.phase !== "playing") return false;
 
   return room.game.currentPlayerId === playerId;
+}
+
+/**
+ * 當目前輪到的玩家已不在房間時，維持同一回合並把繪圖權交給仍在線的玩家。
+ * 不增加 currentTurn，因此不會產生缺頁；下一位玩家直接補完原本那一頁。
+ */
+export function recoverMissingCurrentPlayer(
+  room: RoomState
+): RoomState | null {
+  if (room.game.phase !== "playing") return null;
+
+  const players = orderPlayers(room.players);
+  if (players.length === 0) return null;
+
+  const currentPlayerId = room.game.currentPlayerId;
+  if (
+    currentPlayerId &&
+    room.players[currentPlayerId]
+  ) {
+    return null;
+  }
+
+  return {
+    ...room,
+    game: {
+      ...room.game,
+      currentPlayerId: players[0].id,
+    },
+  };
 }
 
 /**
