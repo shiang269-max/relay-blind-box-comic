@@ -1,15 +1,15 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { ref, set } from "firebase/database";
 import { db } from "../lib/firebase";
-import { TOTAL_ROUNDS, generateComicId, type Comic } from "./domain";
+import { TOTAL_ROUNDS, generateComicId, type Comic, type Player, type RoomState } from "./domain";
 import DrawingScreen from "./DrawingScreen";
 import ReviewPage from "./pages/ReviewPage";
 import WaitingPage from "./pages/WaitingPage";
-import type { ReturnType as _Unused } from "typescript";
 
-// 畫面流程集中於此，頁面本身不處理 Firebase 或遊戲規則。
 interface GameRouterProps {
-  roomState: any;
+  room: RoomState | null;
+  players: Player[];
+  submit: (pageDataUrl: string) => Promise<void>;
   roomId: string;
   playerId: string;
   playerName: string;
@@ -17,15 +17,14 @@ interface GameRouterProps {
 }
 
 export default function GameRouter({
-  roomState,
+  room,
+  players,
+  submit,
   roomId,
   playerId,
   playerName,
   onLeaveGame,
 }: GameRouterProps) {
-  const { room, players, submit } = roomState;
-  const [viewingComic, setViewingComic] = useState<Comic | null>(null);
-
   const saveComic = useCallback(async (title: string) => {
     if (!room?.pages) return;
     const id = generateComicId();
@@ -36,10 +35,6 @@ export default function GameRouter({
       pages: room.pages,
     });
   }, [room?.pages]);
-
-  if (viewingComic) {
-    return <ReviewPage comic={viewingComic} onBack={() => setViewingComic(null)} readOnly />;
-  }
 
   if (room?.phase === "playing") {
     if (room.currentPlayerId === playerId) {
@@ -59,7 +54,7 @@ export default function GameRouter({
       );
     }
 
-    const currentPlayer = players.find((player: { id: string }) => player.id === room.currentPlayerId);
+    const currentPlayer = players.find((player) => player.id === room.currentPlayerId);
     return (
       <WaitingPage
         round={room.currentRound}
@@ -77,13 +72,7 @@ export default function GameRouter({
       pages: room.pages ?? {},
     };
 
-    return (
-      <ReviewPage
-        comic={comic}
-        onBack={onLeaveGame}
-        onSave={saveComic}
-      />
-    );
+    return <ReviewPage comic={comic} onBack={onLeaveGame} onSave={saveComic} />;
   }
 
   return null;
