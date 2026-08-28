@@ -16,8 +16,9 @@ export interface Size {
  * - position：世界座標中的左上角視點
  * - zoom：每 1 世界單位對應多少 CSS 像素
  *
- * 最低縮放永遠維持「世界至少完整覆蓋 viewport」。
- * 因此縮小不會再露出世界外區域，也不會出現只有中間區域能繪圖。
+ * 初始視角完整顯示整個世界，並允許再縮小。
+ * 世界外區域由 DrawingSurface 以同一個世界背景延伸渲染，因此不會回到舊版的
+ * 黑邊／獨立畫布問題。
  */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
@@ -66,7 +67,7 @@ export class Camera {
   }
 
   fitToWorld(): void {
-    this._zoom = this.minimumZoom();
+    this._zoom = this.fitZoom();
 
     const visibleWidth = this.viewport.width / this._zoom;
     const visibleHeight = this.viewport.height / this._zoom;
@@ -128,17 +129,18 @@ export class Camera {
     return point.x >= 0 && point.y >= 0 && point.x <= this.world.width && point.y <= this.world.height;
   }
 
-  private minimumZoom(): number {
-    const fitZoom = Math.max(
-      this.viewport.width / this.world.width,
-      this.viewport.height / this.world.height
+  private fitZoom(): number {
+    return Math.max(
+      this.absoluteMinZoom,
+      Math.min(
+        this.viewport.width / this.world.width,
+        this.viewport.height / this.world.height
+      )
     );
-
-    return Math.max(this.absoluteMinZoom, fitZoom);
   }
 
   private clampZoom(zoom: number): number {
-    return Math.max(this.minimumZoom(), Math.min(this.maxZoom, zoom));
+    return Math.max(this.absoluteMinZoom, Math.min(this.maxZoom, zoom));
   }
 
   private clamp(): void {
