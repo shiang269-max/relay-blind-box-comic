@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  get,
   onDisconnect,
   onValue,
   ref,
   remove,
+  runTransaction,
   set,
-  update,
 } from "firebase/database";
 import { db } from "../lib/firebase";
 import {
@@ -22,12 +21,21 @@ export interface RoomSession {
   playerName: string;
 }
 
+function orderPlayers(players: Record<string, Player> | undefined): Player[] {
+  return Object.values(players ?? {}).sort(
+    (a, b) => a.joinedAt - b.joinedAt
+  );
+}
+
 export function useRoom(session: RoomSession) {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
+
     const roomRef = ref(db, `rooms/${session.roomId}`);
+
     return onValue(roomRef, (snapshot) => {
       setRoom(snapshot.val() as RoomState | null);
       setLoading(false);
@@ -57,63 +65,76 @@ export function useRoom(session: RoomSession) {
   }, [session.playerId, session.playerName, session.roomId]);
 
   const players = useMemo(() => {
-    return Object.values(room?.players ?? {}).sort(
-      (a, b) => a.joinedAt - b.joinedAt
-    );
+    return orderPlayers(room?.players);
   }, [room?.players]);
 
   const isHost = players[0]?.id === session.playerId;
 
   const start = useCallback(
     async (map: MapType) => {
-      const playerSnapshot = await get(
-        ref(db, `rooms/${session.roomId}/players`)
-      );
-      const currentPlayers = playerSnapshot.val() as Record<string, Player> | null;
-      if (!currentPlayers) return;
+      await runTransaction(
+        ref(db, `rooms/${session.roomId}`),
+        (current: RoomState | null) => {
+          const ordered = orderPlayers(current?.players);
 
-      const ordered = Object.values(currentPlayers).sort(
-        (a, b) => a.joinedAt - b.joinedAt
-      );
-      if (ordered.length === 0) return;
+          if (ordered.length === 0) return;
+          if (ordered[0].id !== session.playerId) return;
+          if (current?.phase === "playing") return;
 
-      await update(ref(db, `rooms/${session.roomId}`), {
-        map,
-        phase: "playing",
-        currentRound: 1,
-        currentPlayerId: ordered[0].id,
-        pages: {},
-        createdAt: Date.now(),
-      });
+          return {
+            ...(current ?? {}),
+            map,
+            phase: "playing",
+            currentRound: 1,
+            currentPlayerId: ordered[0].id,
+            pages: {},
+            createdAt: Date.now(),
+            players: current?.players ?? {},
+          } satisfies RoomState;
+        },
+        { applyLocally: false }
+      );
     },
-    [session.roomId]
+    [session.playerId, session.roomId]
   );
 
   const submit = useCallback(
     async (pageDataUrl: string) => {
-      const snapshot = await get(ref(db, `rooms/${session.roomId}`));
-      const current = snapshot.val() as RoomState | null;
-      if (!current) return;
-      if (current.phase !== "playing") return;
-      if (current.currentPlayerId !== session.playerId) return;
+      await runTransaction(
+        ref(db, `rooms/${session.roomId}`),
+        (current: RoomState | null) => {
+          if (!current) return;
+          if (current.phase !== "playing") return;
+          if (current.currentPlayerId !== session.playerId) return;
 
-      const ordered = Object.values(current.players ?? {}).sort(
-        (a, b) => a.joinedAt - b.joinedAt
+          const ordered = orderPlayers(current.players);
+          if (ordered.length === 0) return;
+
+          const index = ordered.findIndex(
+            (player) => player.id === session.playerId
+          );
+
+          if (index < 0) return;
+
+          const last = current.currentRound >= TOTAL_ROUNDS;
+          const nextPlayer = ordered[(index + 1) % ordered.length];
+          const pages = {
+            ...(current.pages ?? {}),
+            [String(current.currentRound)]: pageDataUrl,
+          };
+
+          return {
+            ...current,
+            pages,
+            currentRound: last
+              ? current.currentRound
+              : current.currentRound + 1,
+            currentPlayerId: last ? null : nextPlayer.id,
+            phase: last ? "review" : "playing",
+          } satisfies RoomState;
+        },
+        { applyLocally: false }
       );
-      if (ordered.length === 0) return;
-
-      const index = ordered.findIndex(
-        (player) => player.id === session.playerId
-      );
-      const nextPlayer = ordered[(index + 1) % ordered.length];
-      const last = current.currentRound >= TOTAL_ROUNDS;
-
-      await update(ref(db, `rooms/${session.roomId}`), {
-        [`pages/${current.currentRound}`]: pageDataUrl,
-        currentRound: last ? current.currentRound : current.currentRound + 1,
-        currentPlayerId: last ? null : nextPlayer.id,
-        phase: last ? "review" : "playing",
-      });
     },
     [session.playerId, session.roomId]
   );
