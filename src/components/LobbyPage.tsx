@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Globe, Rocket, ArrowRight, Hash, BookOpen } from 'lucide-react';
 import type { MapType } from '../lib/gameTypes';
 
@@ -23,7 +23,6 @@ export default function LobbyPage({
   onSetName,
   onStartGame,
   onJoinRoom,
-  currentPhase,
   myName,
   onViewHistory,
 }: LobbyPageProps) {
@@ -49,13 +48,11 @@ export default function LobbyPage({
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Title */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-black text-white tracking-tight mb-1">接力盲盒漫畫</h1>
           <p className="text-slate-400 text-sm">多人接力創作漫畫遊戲</p>
         </div>
 
-        {/* Room ID */}
         <div className="bg-slate-800/60 rounded-2xl p-4 mb-4 border border-slate-700/50">
           <div className="flex items-center gap-2 mb-2">
             <Hash size={16} className="text-sky-400" />
@@ -73,7 +70,6 @@ export default function LobbyPage({
           <p className="text-slate-500 text-xs mt-1 truncate">{shareUrl}</p>
         </div>
 
-        {/* Name Input */}
         {!nameSet ? (
           <div className="bg-slate-800/60 rounded-2xl p-4 mb-4 border border-slate-700/50">
             <label className="block text-slate-300 text-sm mb-2 font-medium">你的名字</label>
@@ -108,7 +104,6 @@ export default function LobbyPage({
           </div>
         )}
 
-        {/* History */}
         <button
           onClick={onViewHistory}
           className="w-full flex items-center justify-center gap-2 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 rounded-2xl p-3.5 mb-4 border border-slate-700/50 transition-colors font-semibold text-sm"
@@ -117,7 +112,6 @@ export default function LobbyPage({
           歷史漫畫
         </button>
 
-        {/* Join different room */}
         <div className="bg-slate-800/60 rounded-2xl p-4 mb-4 border border-slate-700/50">
           <label className="block text-slate-300 text-sm mb-2 font-medium">加入其他房間</label>
           <div className="flex gap-2">
@@ -138,7 +132,6 @@ export default function LobbyPage({
           </div>
         </div>
 
-        {/* Players */}
         <div className="bg-slate-800/60 rounded-2xl p-4 mb-4 border border-slate-700/50">
           <div className="flex items-center justify-between mb-3">
             <span className="text-slate-300 text-sm font-medium">在線玩家</span>
@@ -165,7 +158,6 @@ export default function LobbyPage({
           </div>
         </div>
 
-        {/* Host Controls */}
         {isHost && nameSet && (
           <div className="bg-slate-800/60 rounded-2xl p-4 mb-4 border border-slate-700/50">
             <label className="block text-slate-300 text-sm mb-3 font-medium">選擇地圖</label>
