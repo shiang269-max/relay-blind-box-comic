@@ -2,6 +2,7 @@ import type { Player, RoomState } from "../domain";
 import { getGameFlow } from "./getGameFlow";
 import {
   appendRelayPage,
+  createRelayModeState,
   type RelayModeState,
 } from "./RelayModeState";
 import type { GameState } from "./GameState";
@@ -53,14 +54,15 @@ export function nextRoundState(room: RoomState, pageDataUrl: string): RoomState 
   const players = orderPlayers(room.players);
   if (players.length === 0) return null;
 
-  const flow = getGameFlow(room.game.mode);
+  const mode = room.game.mode ?? "relay-30";
+  const flow = getGameFlow(mode);
   const next = flow.getNextState({
     currentRound: room.game.currentTurn,
     currentPlayerId: room.game.currentPlayerId,
     playerIds: players.map((player) => player.id),
   });
 
-  if (room.game.mode !== "relay-30") {
+  if (mode !== "relay-30") {
     throw new Error("目前尚未實作此模式的送出規則");
   }
 
@@ -75,6 +77,7 @@ export function nextRoundState(room: RoomState, pageDataUrl: string): RoomState 
     ...room,
     game: {
       ...room.game,
+      mode,
       modeState: nextModeState,
       phase: next.phase,
       currentTurn: next.currentRound,
@@ -83,12 +86,13 @@ export function nextRoundState(room: RoomState, pageDataUrl: string): RoomState 
   };
 }
 
+/**
+ * Backward-compatible reader for rooms created before modeState was persisted.
+ * The default 30-page mode starts with an empty page collection.
+ */
 export function asRelayModeState(game: GameState): RelayModeState {
-  if (!isRelayModeState(game.modeState)) {
-    throw new Error("relay-30 的 modeState 資料格式無效");
-  }
-
-  return game.modeState;
+  if (isRelayModeState(game.modeState)) return game.modeState;
+  return createRelayModeState();
 }
 
 function isRelayModeState(value: unknown): value is RelayModeState {
