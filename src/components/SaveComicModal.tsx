@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, BookOpen, Check } from 'lucide-react';
 
 interface SaveComicModalProps {
@@ -32,7 +32,6 @@ export default function SaveComicModal({ onSave, onClose }: SaveComicModalProps)
       onClick={e => { if (e.target === e.currentTarget && state === 'idle') onClose(); }}
     >
       <div className="w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
           <div className="flex items-center gap-2">
             <BookOpen size={18} className="text-sky-400" />
@@ -45,7 +44,6 @@ export default function SaveComicModal({ onSave, onClose }: SaveComicModalProps)
           )}
         </div>
 
-        {/* Body */}
         <div className="px-5 py-5">
           {state === 'done' ? (
             <div className="flex flex-col items-center gap-3 py-4">
