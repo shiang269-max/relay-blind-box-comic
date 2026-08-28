@@ -9,6 +9,7 @@ import {
 } from "./domain";
 import { getGameFlow } from "./game/getGameFlow";
 import { getGameMode } from "./game/GameMode";
+import type { RelayModeState } from "./game/RelayModeState";
 import DrawingScreen from "./DrawingScreen";
 import ReviewPage from "./pages/ReviewPage";
 import WaitingPage from "./pages/WaitingPage";
@@ -33,35 +34,47 @@ export default function GameRouter({
   onLeaveGame,
 }: GameRouterProps) {
   const saveComic = useCallback(async (title: string) => {
-    if (!room?.pages) return;
+    if (!room || room.game.mode !== "relay-30") return;
+
+    const relayState = room.game.modeState as RelayModeState;
     const id = generateComicId();
+
     await set(ref(db, `comics/${id}`), {
       id,
       title: title.trim() || "未命名漫畫",
       createdAt: Date.now(),
-      pages: room.pages,
+      pages: relayState.pages,
     });
-  }, [room?.pages]);
+  }, [room]);
 
-  if (room?.phase === "playing") {
-    const mode = getGameMode(room.mode);
-    const flow = getGameFlow(room.mode);
+  if (!room) return null;
 
-    if (room.currentPlayerId === playerId) {
+  const { game } = room;
+
+  if (game.phase === "playing") {
+    const mode = getGameMode(game.mode);
+    const flow = getGameFlow(game.mode);
+
+    if (game.currentPlayerId === playerId) {
+      if (game.mode !== "relay-30") {
+        return null;
+      }
+
+      const relayState = game.modeState as RelayModeState;
       const previousKey = flow.getPreviousDrawingKey({
-        currentRound: room.currentRound,
-        currentPlayerId: room.currentPlayerId,
+        currentRound: game.currentTurn,
+        currentPlayerId: game.currentPlayerId,
         playerIds: players.map((player) => player.id),
       });
 
       const previousPage = previousKey
-        ? room.pages?.[previousKey] ?? null
+        ? relayState.pages[previousKey] ?? null
         : null;
 
       return (
         <DrawingScreen
           mode={mode}
-          round={room.currentRound}
+          round={game.currentTurn}
           map={room.map}
           playerName={playerName}
           previousPage={previousPage}
@@ -70,10 +83,10 @@ export default function GameRouter({
       );
     }
 
-    const currentPlayer = players.find((player) => player.id === room.currentPlayerId);
+    const currentPlayer = players.find((player) => player.id === game.currentPlayerId);
     return (
       <WaitingPage
-        round={room.currentRound}
+        round={game.currentTurn}
         totalRounds={mode.totalRounds}
         modeLabel={mode.label}
         currentPlayerName={currentPlayer?.name ?? "其他玩家"}
@@ -81,12 +94,15 @@ export default function GameRouter({
     );
   }
 
-  if (room?.phase === "review") {
+  if (game.phase === "review") {
+    if (game.mode !== "relay-30") return null;
+
+    const relayState = game.modeState as RelayModeState;
     const comic: Comic = {
       id: roomId,
       title: "本局成果",
       createdAt: room.createdAt ?? Date.now(),
-      pages: room.pages ?? {},
+      pages: relayState.pages,
     };
 
     return <ReviewPage comic={comic} onBack={onLeaveGame} onSave={saveComic} />;
