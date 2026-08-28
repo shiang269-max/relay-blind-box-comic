@@ -154,6 +154,14 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
     onStrokeEnd: scheduleAutosave,
   });
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", handleWheel);
+  }, [handleWheel]);
+
   const handleSubmit = async () => {
     const session = sessionRef.current;
     const lifecycle = lifecycleRef.current;
@@ -205,7 +213,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
       </header>
 
       <main ref={containerRef} className="relative z-10 min-h-0 flex-1 overflow-hidden">
-        <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full touch-none select-none" style={{ touchAction: "none" }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={finishPointer} onPointerCancel={finishPointer} onWheel={handleWheel} />
+        <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full touch-none select-none" style={{ touchAction: "none" }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={finishPointer} onPointerCancel={finishPointer} />
         <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
         {loadingDrawing && <div className="absolute inset-0 flex items-center justify-center bg-slate-950/35 text-sm font-medium text-white backdrop-blur-sm">載入繪圖資料中...</div>}
       </main>
