@@ -9,6 +9,7 @@ interface UseDrawingInteractionOptions {
   sessionRef: React.RefObject<DrawingSession | null>;
   brush: () => Brush;
   moveMode: boolean;
+  onStrokeEnd?: () => void;
 }
 
 /**
@@ -20,6 +21,7 @@ export function useDrawingInteraction({
   sessionRef,
   brush,
   moveMode,
+  onStrokeEnd,
 }: UseDrawingInteractionOptions) {
   const activePointers = useRef(new Map<number, ScreenPoint>());
   const pinchDistance = useRef<number | null>(null);
@@ -135,15 +137,16 @@ export function useDrawingInteraction({
 
     if (activePointers.current.size === 1) {
       const remaining = [...activePointers.current.values()][0];
-      // After a pinch, the remaining finger must lift before a new drawing stroke begins.
       panPoint.current = moveMode ? remaining : null;
       session?.end();
       return;
     }
 
     panPoint.current = null;
+    const hadDrawingPointer = !moveMode;
     session?.end();
-  }, [moveMode, resetPinch, sessionRef]);
+    if (hadDrawingPointer) onStrokeEnd?.();
+  }, [moveMode, onStrokeEnd, resetPinch, sessionRef]);
 
   const handleWheel = useCallback((event: React.WheelEvent<HTMLCanvasElement>) => {
     event.preventDefault();
