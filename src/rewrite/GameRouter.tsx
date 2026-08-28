@@ -74,6 +74,8 @@ export default function GameRouter({
       return (
         <DrawingScreen
           mode={mode}
+          roomId={roomId}
+          pageIndex={Math.max(0, game.currentTurn - 1)}
           round={game.currentTurn}
           map={room.map}
           playerName={playerName}
