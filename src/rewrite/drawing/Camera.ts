@@ -16,8 +16,8 @@ export interface Size {
  * - position：世界座標中的左上角視點
  * - zoom：每 1 世界單位對應多少 CSS 像素
  *
- * Resize 時保留「舊 viewport 中心對應的 world point」，
- * 再以新 viewport 中心重新定位，避免手機網址列或旋轉造成畫面跳動。
+ * 最低縮放永遠維持「世界至少完整覆蓋 viewport」。
+ * 因此縮小不會再露出世界外區域，也不會出現只有中間區域能繪圖。
  */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
@@ -27,7 +27,7 @@ export class Camera {
 
   constructor(
     private readonly world: Size,
-    private readonly minZoom = 0.05,
+    private readonly absoluteMinZoom = 0.01,
     private readonly maxZoom = 10
   ) {}
 
@@ -66,12 +66,7 @@ export class Camera {
   }
 
   fitToWorld(): void {
-    const fitZoom = Math.min(
-      this.viewport.width / this.world.width,
-      this.viewport.height / this.world.height
-    );
-
-    this._zoom = this.clampZoom(fitZoom);
+    this._zoom = this.minimumZoom();
 
     const visibleWidth = this.viewport.width / this._zoom;
     const visibleHeight = this.viewport.height / this._zoom;
@@ -133,8 +128,17 @@ export class Camera {
     return point.x >= 0 && point.y >= 0 && point.x <= this.world.width && point.y <= this.world.height;
   }
 
+  private minimumZoom(): number {
+    const fitZoom = Math.max(
+      this.viewport.width / this.world.width,
+      this.viewport.height / this.world.height
+    );
+
+    return Math.max(this.absoluteMinZoom, fitZoom);
+  }
+
   private clampZoom(zoom: number): number {
-    return Math.max(this.minZoom, Math.min(this.maxZoom, zoom));
+    return Math.max(this.minimumZoom(), Math.min(this.maxZoom, zoom));
   }
 
   private clamp(): void {
