@@ -10,7 +10,6 @@ import {
   Plus,
   Eraser,
   Check,
-  X,
   Flag,
 } from "lucide-react";
 import {
