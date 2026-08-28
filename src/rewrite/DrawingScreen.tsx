@@ -20,6 +20,9 @@ import type { GameMode } from "./game/GameMode";
 import { DrawingSession } from "./drawing/DrawingSession";
 import { DrawingSurface, type Brush } from "./drawing/DrawingSurface";
 import { useDrawingInteraction } from "./drawing/useDrawingInteraction";
+import { RelayPageDrawingAdapter } from "./modes/RelayPageDrawingAdapter";
+import { RelayPageDrawingLifecycle } from "./modes/RelayPageDrawingLifecycle";
+import { FirebaseDrawingPersistence } from "./persistence/FirebaseDrawingPersistence";
 
 const COLORS = [
   "#000000",
@@ -36,6 +39,8 @@ const COLORS = [
 
 interface DrawingScreenProps {
   mode: GameMode;
+  roomId: string;
+  pageIndex: number;
   round: number;
   map: MapType;
   playerName: string;
@@ -45,6 +50,8 @@ interface DrawingScreenProps {
 
 export default function DrawingScreen({
   mode,
+  roomId,
+  pageIndex,
   round,
   map,
   playerName,
@@ -55,12 +62,14 @@ export default function DrawingScreen({
   const containerRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<DrawingSurface | null>(null);
   const sessionRef = useRef<DrawingSession | null>(null);
+  const lifecycleRef = useRef<RelayPageDrawingLifecycle | null>(null);
 
   const [color, setColor] = useState("#000000");
   const [size, setSize] = useState(8);
   const [eraser, setEraser] = useState(false);
   const [moveMode, setMoveMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingDrawing, setLoadingDrawing] = useState(true);
 
   const time = getTimeOfDay(round);
   const background = getBackgroundColor(map, time);
@@ -82,32 +91,54 @@ export default function DrawingScreen({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    let cancelled = false;
+    setLoadingDrawing(true);
+
     const surface = new DrawingSurface(canvas, {
       worldWidth: WORLD_WIDTH,
       worldHeight: WORLD_HEIGHT,
       background,
     });
     const session = new DrawingSession(surface);
+    const adapter = new RelayPageDrawingAdapter({
+      roomId,
+      pageIndex,
+      persistence: new FirebaseDrawingPersistence(),
+    });
+    const lifecycle = new RelayPageDrawingLifecycle(session, adapter);
 
     surfaceRef.current = surface;
     sessionRef.current = session;
+    lifecycleRef.current = lifecycle;
     resize();
 
-    if (previousPage) {
-      void surface.loadImage(previousPage);
-    }
+    const initialize = async () => {
+      try {
+        if (previousPage) {
+          await surface.loadImage(previousPage);
+        }
+
+        await lifecycle.initialize();
+      } finally {
+        if (!cancelled) setLoadingDrawing(false);
+      }
+    };
+
+    void initialize();
 
     const observer = new ResizeObserver(resize);
     const container = containerRef.current;
     if (container) observer.observe(container);
 
     return () => {
+      cancelled = true;
       observer.disconnect();
       session.end();
       if (surfaceRef.current === surface) surfaceRef.current = null;
       if (sessionRef.current === session) sessionRef.current = null;
+      if (lifecycleRef.current === lifecycle) lifecycleRef.current = null;
     };
-  }, [background, previousPage, resize]);
+  }, [background, pageIndex, previousPage, resize, roomId]);
 
   const {
     handlePointerDown,
@@ -123,12 +154,15 @@ export default function DrawingScreen({
 
   const handleSubmit = async () => {
     const session = sessionRef.current;
-    if (!session || submitting) return;
+    const lifecycle = lifecycleRef.current;
+    if (!session || !lifecycle || submitting || loadingDrawing) return;
 
     setSubmitting(true);
 
     try {
+      await lifecycle.saveSnapshot();
       await onSubmit(session.exportPng());
+      await lifecycle.clear();
     } finally {
       setSubmitting(false);
     }
@@ -163,11 +197,11 @@ export default function DrawingScreen({
 
           <button
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || loadingDrawing}
             className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-green-500 px-4 text-sm font-bold shadow disabled:opacity-50"
           >
             <Check size={18} />
-            {submitting ? "送出中" : "送出"}
+            {loadingDrawing ? "載入中" : submitting ? "送出中" : "送出"}
           </button>
         </div>
 
@@ -192,6 +226,12 @@ export default function DrawingScreen({
           onPointerCancel={finishPointer}
           onWheel={handleWheel}
         />
+
+        {loadingDrawing && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-sm font-medium text-white backdrop-blur-sm">
+            載入繪圖資料中...
+          </div>
+        )}
       </main>
 
       <section className="shrink-0 border-t border-white/10 bg-black/45 text-white backdrop-blur">
@@ -257,10 +297,10 @@ export default function DrawingScreen({
           </button>
 
           <button
-            onClick={() => sessionRef.current?.clear()}
+            onClick={() => void lifecycleRef.current?.clear()}
             className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-white/10"
-            title="清除畫面"
-            aria-label="清除畫面"
+            title="清除本頁筆劃"
+            aria-label="清除本頁筆劃"
           >
             <Trash2 size={19} />
           </button>
