@@ -12,44 +12,75 @@ export class Camera {
     public zoom = 1
   ) {}
 
-  setViewport(width: number, height: number): void {
+  setViewport(
+    width: number,
+    height: number
+  ): void {
     this.viewportWidth = width;
     this.viewportHeight = height;
 
-    this.zoom = this.clampZoom(this.zoom);
+    this.zoom = this.clampZoom(
+      this.zoom
+    );
+
     this.clampPosition();
   }
 
-  setPosition(x: number, y: number): void {
+  setPosition(
+    x: number,
+    y: number
+  ): void {
     this.x = x;
     this.y = y;
 
     this.clampPosition();
   }
 
-  move(dx: number, dy: number): void {
+  move(
+    dx: number,
+    dy: number
+  ): void {
     this.setPosition(
       this.x + dx,
       this.y + dy
     );
   }
 
-  setZoom(zoom: number): void {
-    this.zoom = this.clampZoom(zoom);
+  setZoom(
+    zoom: number
+  ): void {
+    this.zoom = this.clampZoom(
+      zoom
+    );
+
     this.clampPosition();
   }
 
-  screenToWorld(point: Point): Point {
+  screenToWorld(
+    point: Point
+  ): Point {
     return {
-      x: point.x / this.zoom + this.x,
-      y: point.y / this.zoom + this.y,
+      x:
+        point.x / this.zoom +
+        this.x,
+
+      y:
+        point.y / this.zoom +
+        this.y,
     };
   }
 
-  worldToScreen(point: Point): Point {
+  worldToScreen(
+    point: Point
+  ): Point {
     return {
-      x: (point.x - this.x) * this.zoom,
-      y: (point.y - this.y) * this.zoom,
+      x:
+        (point.x - this.x) *
+        this.zoom,
+
+      y:
+        (point.y - this.y) *
+        this.zoom,
     };
   }
 
@@ -57,20 +88,65 @@ export class Camera {
     screenPoint: Point,
     factor: number
   ): void {
-    const worldPoint = this.screenToWorld(screenPoint);
+    const worldPoint =
+      this.screenToWorld(
+        screenPoint
+      );
 
-    this.setZoom(this.zoom * factor);
+    const nextZoom =
+      this.clampZoom(
+        this.zoom * factor
+      );
 
-    this.setPosition(
-      worldPoint.x - screenPoint.x / this.zoom,
-      worldPoint.y - screenPoint.y / this.zoom
-    );
+    this.zoom = nextZoom;
+
+    const visibleWidth =
+      this.viewportWidth /
+      this.zoom;
+
+    const visibleHeight =
+      this.viewportHeight /
+      this.zoom;
+
+    if (
+      this.worldWidth <=
+      visibleWidth
+    ) {
+      this.x =
+        (this.worldWidth -
+          visibleWidth) /
+        2;
+    } else {
+      this.x =
+        worldPoint.x -
+        screenPoint.x /
+          this.zoom;
+    }
+
+    if (
+      this.worldHeight <=
+      visibleHeight
+    ) {
+      this.y =
+        (this.worldHeight -
+          visibleHeight) /
+        2;
+    } else {
+      this.y =
+        worldPoint.y -
+        screenPoint.y /
+          this.zoom;
+    }
+
+    this.clampPosition();
   }
 
   reset(): void {
+    this.zoom =
+      this.minimumZoom();
+
     this.x = 0;
     this.y = 0;
-    this.zoom = this.minimumZoom();
 
     this.clampPosition();
   }
@@ -91,10 +167,15 @@ export class Camera {
     return this.viewportHeight;
   }
 
-  private clampZoom(zoom: number): number {
+  private clampZoom(
+    zoom: number
+  ): number {
     return Math.max(
       this.minimumZoom(),
-      Math.min(10, zoom)
+      Math.min(
+        10,
+        zoom
+      )
     );
   }
 
@@ -107,8 +188,11 @@ export class Camera {
     }
 
     return Math.min(
-      this.viewportWidth / this.worldWidth,
-      this.viewportHeight / this.worldHeight
+      this.viewportWidth /
+        this.worldWidth,
+
+      this.viewportHeight /
+        this.worldHeight
     );
   }
 
@@ -121,29 +205,55 @@ export class Camera {
     }
 
     const visibleWidth =
-      this.viewportWidth / this.zoom;
+      this.viewportWidth /
+      this.zoom;
 
     const visibleHeight =
-      this.viewportHeight / this.zoom;
+      this.viewportHeight /
+      this.zoom;
 
-    const maxX = Math.max(
-      0,
-      this.worldWidth - visibleWidth
-    );
+    if (
+      visibleWidth >=
+      this.worldWidth
+    ) {
+      this.x =
+        (this.worldWidth -
+          visibleWidth) /
+        2;
+    } else {
+      const maxX =
+        this.worldWidth -
+        visibleWidth;
 
-    const maxY = Math.max(
-      0,
-      this.worldHeight - visibleHeight
-    );
+      this.x = Math.max(
+        0,
+        Math.min(
+          this.x,
+          maxX
+        )
+      );
+    }
 
-    this.x = Math.max(
-      0,
-      Math.min(this.x, maxX)
-    );
+    if (
+      visibleHeight >=
+      this.worldHeight
+    ) {
+      this.y =
+        (this.worldHeight -
+          visibleHeight) /
+        2;
+    } else {
+      const maxY =
+        this.worldHeight -
+        visibleHeight;
 
-    this.y = Math.max(
-      0,
-      Math.min(this.y, maxY)
-    );
+      this.y = Math.max(
+        0,
+        Math.min(
+          this.y,
+          maxY
+        )
+      );
+    }
   }
 }

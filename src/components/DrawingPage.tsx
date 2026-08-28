@@ -1,17 +1,29 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
-import { Palette, Minus, Plus, Eraser, Check, X, Flag } from "lucide-react";
-import { getTimeOfDay } from "../lib/gameTypes";
+import React, {
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import {
+  Palette,
+  Minus,
+  Plus,
+  Eraser,
+  Check,
+  X,
+  Flag,
+} from "lucide-react";
+import {
+  getTimeOfDay,
+  type MapType,
+  type TimeOfDay,
+} from "../lib/gameTypes";
 
-// 舊 Engine
-
-// 新 Engine2
-import { Camera as Engine2Camera } from "../engine2/Camera";
-import { CameraController } from "../engine2/CameraController";
-import { DrawingEngine } from "../engine2/DrawingEngine";
-import { Renderer } from "../engine2/Renderer";
-import { Pointer } from "../engine2/Pointer";
-
-import type { MapType, TimeOfDay } from "../lib/gameTypes";
+import { Camera } from "../engine/camera/Camera";
+import { CameraController } from "../engine/camera/CameraController";
+import { DrawingEngine } from "../engine/drawing/DrawingEngine";
+import { Pointer } from "../engine/input/Pointer";
+import { Renderer } from "../engine/render/Renderer";
 
 const CANVAS_WIDTH = 3000;
 const CANVAS_HEIGHT = 5000;
@@ -26,47 +38,94 @@ interface DrawingPageProps {
   onDevReview: () => void;
 }
 
-interface DebugInfo {
-  containerWidth: number;
-  containerHeight: number;
-  canvasWidth: number;
-  canvasHeight: number;
-  rectWidth: number;
-  rectHeight: number;
-  dpr: number;
-  cameraX: number;
-  cameraY: number;
-  cameraZoom: number;
-}
-
 const COLORS = [
-  '#000000', '#ffffff', '#ef4444', '#f97316', '#eab308',
-  '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6',
-  '#6b7280', '#92400e', '#1e3a5f', '#fde68a', '#bbf7d0',
+  "#000000",
+  "#ffffff",
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+  "#14b8a6",
+  "#6b7280",
+  "#92400e",
+  "#1e3a5f",
+  "#fde68a",
+  "#bbf7d0",
 ];
 
-function getCanvasBgColor(map: MapType, time: TimeOfDay): string {
-  if (map === 'earth') {
-    if (time === 'day') return '#bfefff';
-    if (time === 'dusk') return '#ffd580';
-    return '#1a2744';
+function getCanvasBgColor(
+  map: MapType,
+  time: TimeOfDay
+): string {
+  if (map === "earth") {
+    if (time === "day") {
+      return "#bfefff";
+    }
+
+    if (time === "dusk") {
+      return "#ffd580";
+    }
+
+    return "#1a2744";
   }
 
-  if (time === 'day') return '#0d1b4b';
-  if (time === 'dusk') return '#2d0a3e';
-  return '#050a14';
+  if (time === "day") {
+    return "#0d1b4b";
+  }
+
+  if (time === "dusk") {
+    return "#2d0a3e";
+  }
+
+  return "#050a14";
 }
 
-function getHeaderColors(map: MapType, time: TimeOfDay) {
-  if (map === 'earth') {
-    if (time === 'day') return { bg: 'rgba(14,116,144,0.85)', text: '#ffffff' };
-    if (time === 'dusk') return { bg: 'rgba(154,52,18,0.85)', text: '#ffffff' };
-    return { bg: 'rgba(15,23,42,0.90)', text: '#e2e8f0' };
+function getHeaderColors(
+  map: MapType,
+  time: TimeOfDay
+) {
+  if (map === "earth") {
+    if (time === "day") {
+      return {
+        bg: "rgba(14,116,144,0.85)",
+        text: "#ffffff",
+      };
+    }
+
+    if (time === "dusk") {
+      return {
+        bg: "rgba(154,52,18,0.85)",
+        text: "#ffffff",
+      };
+    }
+
+    return {
+      bg: "rgba(15,23,42,0.90)",
+      text: "#e2e8f0",
+    };
   }
 
-  if (time === 'day') return { bg: 'rgba(13,27,75,0.90)', text: '#c7d2fe' };
-  if (time === 'dusk') return { bg: 'rgba(45,10,62,0.90)', text: '#f0abfc' };
-  return { bg: 'rgba(5,10,20,0.95)', text: '#94a3b8' };
+  if (time === "day") {
+    return {
+      bg: "rgba(13,27,75,0.90)",
+      text: "#c7d2fe",
+    };
+  }
+
+  if (time === "dusk") {
+    return {
+      bg: "rgba(45,10,62,0.90)",
+      text: "#f0abfc",
+    };
+  }
+
+  return {
+    bg: "rgba(5,10,20,0.95)",
+    text: "#94a3b8",
+  };
 }
 
 export default function DrawingPage({
@@ -79,142 +138,237 @@ export default function DrawingPage({
   onDevReview,
 }: DrawingPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const drawingEngineRef = useRef<DrawingEngine | null>(null);
-  const rendererRef = useRef<Renderer | null>(null);
-  const cameraRef = useRef(new Engine2Camera());
 
-  const cameraControllerRef = useRef(
-    new CameraController(cameraRef.current)
-  );
+  const containerRef =
+    useRef<HTMLDivElement>(null);
 
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [color, setColor] = useState('#000000');
-  const [brushSize, setBrushSize] = useState(6);
-  const [isEraser, setIsEraser] = useState(false);
-  const [toolOpen, setToolOpen] = useState(false);
-  const [showPrev, setShowPrev] = useState(false);
-  const [moveMode, setMoveMode] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
-
-  const timeOfDay = getTimeOfDay(round);
-  const canvasBg = getCanvasBgColor(map, timeOfDay);
-  const headerColors = getHeaderColors(map, timeOfDay);
-
-  const updateDebugInfo = useCallback(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-
-    if (!canvas || !container) return;
-
-    const rect = canvas.getBoundingClientRect();
-
-    setDebugInfo({
-      containerWidth: Math.round(container.clientWidth),
-      containerHeight: Math.round(container.clientHeight),
-      canvasWidth: canvas.width,
-      canvasHeight: canvas.height,
-      rectWidth: Math.round(rect.width),
-      rectHeight: Math.round(rect.height),
-      dpr: window.devicePixelRatio,
-      cameraX: Math.round(cameraRef.current.x),
-      cameraY: Math.round(cameraRef.current.y),
-      cameraZoom: Number(cameraRef.current.zoom.toFixed(6)),
-    });
-  }, []);
-
-  const getCanvasPos = useCallback((e: React.PointerEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-
-    return Pointer.getWorldPosition(
-      e.nativeEvent,
-      canvas,
-      cameraRef.current
-    );
-  }, []);
-
-  const initCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-
-    if (!canvas || !container) return;
-
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
-
-    cameraRef.current.setViewport(
-      canvas.width,
-      canvas.height
+  const cameraRef =
+    useRef(
+      new Camera(
+        CANVAS_WIDTH,
+        CANVAS_HEIGHT
+      )
     );
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const renderer = new Renderer(
-      ctx,
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT
+  const cameraControllerRef =
+    useRef(
+      new CameraController(
+        cameraRef.current
+      )
     );
 
-    const pointer = new Pointer();
+  const rendererRef =
+    useRef<Renderer | null>(null);
 
-    rendererRef.current = renderer;
+  const drawingEngineRef =
+    useRef<DrawingEngine | null>(null);
 
-    drawingEngineRef.current = new DrawingEngine(
-      cameraRef.current,
-      renderer,
-      pointer
+  const [isDrawing, setIsDrawing] =
+    useState(false);
+
+  const [color, setColor] =
+    useState("#000000");
+
+  const [brushSize, setBrushSize] =
+    useState(6);
+
+  const [isEraser, setIsEraser] =
+    useState(false);
+
+  const [toolOpen, setToolOpen] =
+    useState(false);
+
+  const [showPrev, setShowPrev] =
+    useState(false);
+
+  const [moveMode, setMoveMode] =
+    useState(false);
+
+  const timeOfDay =
+    getTimeOfDay(round);
+
+  const canvasBg =
+    getCanvasBgColor(
+      map,
+      timeOfDay
     );
 
-    drawingEngineRef.current.clear(
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT
+  const headerColors =
+    getHeaderColors(
+      map,
+      timeOfDay
     );
 
-    updateDebugInfo();
-  }, [updateDebugInfo]);
+  const getScreenPos =
+    useCallback(
+      (
+        e: React.PointerEvent<
+          HTMLCanvasElement
+        >
+      ) => {
+        const canvas =
+          canvasRef.current;
+
+        if (!canvas) {
+          return null;
+        }
+
+        return Pointer.getScreenPosition(
+          e.nativeEvent,
+          canvas
+        );
+      },
+      []
+    );
+
+  const getWorldPos =
+    useCallback(
+      (
+        e: React.PointerEvent<
+          HTMLCanvasElement
+        >
+      ) => {
+        const canvas =
+          canvasRef.current;
+
+        if (!canvas) {
+          return null;
+        }
+
+        return Pointer.getWorldPosition(
+          e.nativeEvent,
+          canvas,
+          cameraRef.current
+        );
+      },
+      []
+    );
+
+  const render =
+    useCallback(() => {
+      drawingEngineRef.current?.render();
+    }, []);
+
+  const resizeCanvas =
+    useCallback(() => {
+      const canvas =
+        canvasRef.current;
+
+      const container =
+        containerRef.current;
+
+      if (!canvas || !container) {
+        return;
+      }
+
+      const width =
+        container.clientWidth;
+
+      const height =
+        container.clientHeight;
+
+      if (
+        width <= 0 ||
+        height <= 0
+      ) {
+        return;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      cameraRef.current.setViewport(
+        width,
+        height
+      );
+
+      render();
+    }, [render]);
+
+  const initCanvas =
+    useCallback(() => {
+      const canvas =
+        canvasRef.current;
+
+      if (!canvas) {
+        return;
+      }
+
+      const ctx =
+        canvas.getContext("2d");
+
+      if (!ctx) {
+        return;
+      }
+
+      if (
+        !rendererRef.current ||
+        !drawingEngineRef.current
+      ) {
+        const renderer =
+          new Renderer(
+            ctx,
+            CANVAS_WIDTH,
+            CANVAS_HEIGHT
+          );
+
+        rendererRef.current =
+          renderer;
+
+        drawingEngineRef.current =
+          new DrawingEngine(
+            cameraRef.current,
+            renderer
+          );
+      }
+
+      resizeCanvas();
+    }, [resizeCanvas]);
 
   useEffect(() => {
     initCanvas();
 
-    const resize = () => {
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-
-      if (!canvas || !container) return;
-
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
-
-      cameraRef.current.setViewport(
-        canvas.width,
-        canvas.height
-      );
-
-      drawingEngineRef.current?.render();
-      updateDebugInfo();
+    const handleResize = () => {
+      resizeCanvas();
     };
 
-    window.addEventListener("resize", resize);
+    window.addEventListener(
+      "resize",
+      handleResize
+    );
 
     return () => {
-      window.removeEventListener("resize", resize);
+      window.removeEventListener(
+        "resize",
+        handleResize
+      );
     };
-  }, [initCanvas, updateDebugInfo]);
+  }, [
+    initCanvas,
+    resizeCanvas,
+  ]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const canvas =
+      canvasRef.current;
 
-    const preventBrowserZoom = (event: WheelEvent) => {
-      if (event.ctrlKey) event.preventDefault();
-    };
+    if (!canvas) {
+      return;
+    }
+
+    const preventBrowserZoom =
+      (event: WheelEvent) => {
+        if (event.ctrlKey) {
+          event.preventDefault();
+        }
+      };
 
     canvas.addEventListener(
       "wheel",
       preventBrowserZoom,
-      { passive: false }
+      {
+        passive: false,
+      }
     );
 
     return () => {
@@ -225,172 +379,302 @@ export default function DrawingPage({
     };
   }, []);
 
-  // On mount: restore previous snapshot so strokes accumulate across rounds
   useEffect(() => {
-    if (prevPageUrl) {
-      const img = new Image();
+    const engine =
+      drawingEngineRef.current;
 
-      img.onload = () => {
-        drawingEngineRef.current?.drawImage(img, 0, 0);
+    if (!engine) {
+      return;
+    }
+
+    if (prevPageUrl) {
+      const image =
+        new Image();
+
+      image.onload = () => {
+        drawingEngineRef.current?.drawImage(
+          image,
+          0,
+          0
+        );
       };
 
-      img.src = prevPageUrl;
-    } else {
-      drawingEngineRef.current?.clear(
-        CANVAS_WIDTH,
-        CANVAS_HEIGHT
-      );
+      image.src =
+        prevPageUrl;
+
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  const handlePointerDown = useCallback((
-    e: React.PointerEvent<HTMLCanvasElement>
-  ) => {
-    e.preventDefault();
+    engine.clear();
+  }, [prevPageUrl]);
 
-    (e.target as HTMLCanvasElement).setPointerCapture(
-      e.pointerId
+  const handlePointerDown =
+    useCallback(
+      (
+        e: React.PointerEvent<
+          HTMLCanvasElement
+        >
+      ) => {
+        e.preventDefault();
+
+        const canvas =
+          e.currentTarget;
+
+        canvas.setPointerCapture(
+          e.pointerId
+        );
+
+        if (moveMode) {
+          const screenPoint =
+            getScreenPos(e);
+
+          if (!screenPoint) {
+            return;
+          }
+
+          cameraControllerRef.current
+            .startMove(
+              screenPoint
+            );
+
+          return;
+        }
+
+        const worldPoint =
+          getWorldPos(e);
+
+        if (!worldPoint) {
+          return;
+        }
+
+        setIsDrawing(true);
+
+        drawingEngineRef.current
+          ?.startDrawing(
+            worldPoint,
+            color,
+            brushSize,
+            isEraser
+          );
+      },
+      [
+        moveMode,
+        getScreenPos,
+        getWorldPos,
+        color,
+        brushSize,
+        isEraser,
+      ]
     );
 
-    if (moveMode) {
-      const point = getCanvasPos(e);
+  const handlePointerMove =
+    useCallback(
+      (
+        e: React.PointerEvent<
+          HTMLCanvasElement
+        >
+      ) => {
+        e.preventDefault();
 
-      if (point) {
-        cameraControllerRef.current.startMove(point);
+        if (moveMode) {
+          const screenPoint =
+            getScreenPos(e);
+
+          if (!screenPoint) {
+            return;
+          }
+
+          cameraControllerRef.current
+            .move(
+              screenPoint
+            );
+
+          render();
+
+          return;
+        }
+
+        if (!isDrawing) {
+          return;
+        }
+
+        const worldPoint =
+          getWorldPos(e);
+
+        if (!worldPoint) {
+          return;
+        }
+
+        drawingEngineRef.current
+          ?.draw(
+            worldPoint,
+            color,
+            brushSize,
+            isEraser
+          );
+      },
+      [
+        moveMode,
+        isDrawing,
+        getScreenPos,
+        getWorldPos,
+        color,
+        brushSize,
+        isEraser,
+        render,
+      ]
+    );
+
+  const handlePointerUp =
+    useCallback(
+      (
+        e: React.PointerEvent<
+          HTMLCanvasElement
+        >
+      ) => {
+        e.preventDefault();
+
+        const canvas =
+          e.currentTarget;
+
+        if (
+          canvas.hasPointerCapture(
+            e.pointerId
+          )
+        ) {
+          canvas.releasePointerCapture(
+            e.pointerId
+          );
+        }
+
+        if (moveMode) {
+          cameraControllerRef.current
+            .endMove();
+
+          return;
+        }
+
+        drawingEngineRef.current
+          ?.endDrawing();
+
+        setIsDrawing(false);
+      },
+      [moveMode]
+    );
+
+  const handleWheel =
+    useCallback(
+      (
+        e: React.WheelEvent<
+          HTMLCanvasElement
+        >
+      ) => {
+        if (!e.ctrlKey) {
+          return;
+        }
+
+        e.preventDefault();
+
+        const canvas =
+          canvasRef.current;
+
+        if (!canvas) {
+          return;
+        }
+
+        const screenPoint =
+          Pointer.getScreenPosition(
+            e.nativeEvent,
+            canvas
+          );
+
+        const factor =
+          e.deltaY < 0
+            ? 1.1
+            : 0.9;
+
+        cameraControllerRef.current
+          .zoomAt(
+            screenPoint,
+            factor
+          );
+
+        render();
+      },
+      [render]
+    );
+
+  const handleClear =
+    useCallback(() => {
+      drawingEngineRef.current
+        ?.clear();
+    }, []);
+
+  const handleSubmit =
+    useCallback(() => {
+      const renderer =
+        rendererRef.current;
+
+      if (!renderer) {
+        return;
       }
 
-      return;
-    }
+      const flat =
+        document.createElement(
+          "canvas"
+        );
 
-    const pos = getCanvasPos(e);
-    if (!pos) return;
+      flat.width =
+        CANVAS_WIDTH;
 
-    setIsDrawing(true);
-    drawingEngineRef.current?.startDrawing(pos);
-  }, [getCanvasPos, moveMode]);
+      flat.height =
+        CANVAS_HEIGHT;
 
-  const handlePointerMove = useCallback((
-    e: React.PointerEvent<HTMLCanvasElement>
-  ) => {
-    e.preventDefault();
+      const context =
+        flat.getContext("2d");
 
-    if (moveMode) {
-      const point = getCanvasPos(e);
-      if (!point) return;
+      if (!context) {
+        return;
+      }
 
-      cameraControllerRef.current.move(point);
-      drawingEngineRef.current?.render();
-      updateDebugInfo();
+      renderer.renderTo(
+        context,
+        canvasBg
+      );
 
-      return;
-    }
-
-    if (!isDrawing) return;
-
-    const pos = getCanvasPos(e);
-    if (!pos) return;
-
-    drawingEngineRef.current?.draw(
-      pos,
-      color,
-      brushSize,
-      isEraser
-    );
-  }, [
-    isDrawing,
-    getCanvasPos,
-    color,
-    brushSize,
-    isEraser,
-    moveMode,
-    updateDebugInfo,
-  ]);
-
-  const handlePointerUp = useCallback((
-    e: React.PointerEvent<HTMLCanvasElement>
-  ) => {
-    e.preventDefault();
-
-    if (moveMode) {
-      cameraControllerRef.current.endMove();
-    } else {
-      drawingEngineRef.current?.endDrawing();
-      setIsDrawing(false);
-    }
-
-    updateDebugInfo();
-  }, [moveMode, updateDebugInfo]);
-
-  const handleWheel = useCallback((
-    e: React.WheelEvent<HTMLCanvasElement>
-  ) => {
-    if (!e.ctrlKey) return;
-
-    e.preventDefault();
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const point = Pointer.getWorldPosition(
-      e.nativeEvent as unknown as PointerEvent,
-      canvas,
-      cameraRef.current
-    );
-
-    cameraControllerRef.current.zoomAt(
-      point,
-      e.deltaY < 0 ? 1.1 : 0.9
-    );
-
-    drawingEngineRef.current?.render();
-    updateDebugInfo();
-  }, [updateDebugInfo]);
-
-  const handleClear = () => {
-    drawingEngineRef.current?.clear(
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT
-    );
-
-    updateDebugInfo();
-  };
-
-  const handleSubmit = () => {
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-
-    const flat = document.createElement('canvas');
-
-    flat.width = CANVAS_WIDTH;
-    flat.height = CANVAS_HEIGHT;
-
-    const context = flat.getContext('2d');
-    if (!context) return;
-
-    renderer.renderTo(context, canvasBg);
-    onSubmit(flat.toDataURL('image/png'));
-  };
+      onSubmit(
+        flat.toDataURL(
+          "image/png"
+        )
+      );
+    }, [
+      canvasBg,
+      onSubmit,
+    ]);
 
   const timeLabel =
-    timeOfDay === 'day'
-      ? '白天'
-      : timeOfDay === 'dusk'
-        ? '黃昏'
-        : '夜晚';
+    timeOfDay === "day"
+      ? "白天"
+      : timeOfDay === "dusk"
+        ? "黃昏"
+        : "夜晚";
 
   return (
     <div
       className="flex flex-col w-full h-screen"
-      style={{ touchAction: 'none' }}
+      style={{
+        touchAction: "none",
+      }}
     >
-      {/* Header */}
       <div
         className="flex items-center justify-between px-3 py-2 flex-shrink-0 backdrop-blur-sm"
         style={{
-          background: headerColors.bg,
-          color: headerColors.text,
-          paddingTop: 'calc(0.5rem + env(safe-area-inset-top))',
+          background:
+            headerColors.bg,
+          color:
+            headerColors.text,
+          paddingTop:
+            "calc(0.5rem + env(safe-area-inset-top))",
         }}
       >
         <div className="min-w-0">
@@ -403,12 +687,18 @@ export default function DrawingPage({
           </div>
         </div>
 
-        {/* Progress bar inside header */}
         <div className="flex-1 mx-3 h-1.5 rounded-full bg-white/20 overflow-hidden">
           <div
             className="h-full bg-white/70 rounded-full transition-all duration-500"
             style={{
-              width: `${(round / totalRounds) * 100}%`,
+              width:
+                `${
+                  (
+                    round /
+                    totalRounds
+                  ) *
+                  100
+                }%`,
             }}
           />
         </div>
@@ -416,9 +706,15 @@ export default function DrawingPage({
         <div className="flex gap-1.5 flex-shrink-0">
           {prevPageUrl && (
             <button
-              onPointerDown={() => setShowPrev(true)}
-              onPointerUp={() => setShowPrev(false)}
-              onPointerLeave={() => setShowPrev(false)}
+              onPointerDown={() =>
+                setShowPrev(true)
+              }
+              onPointerUp={() =>
+                setShowPrev(false)
+              }
+              onPointerLeave={() =>
+                setShowPrev(false)
+              }
               className="text-xs px-2.5 py-1.5 rounded-lg border border-white/25 bg-white/10 active:bg-white/20"
             >
               上頁
@@ -436,7 +732,8 @@ export default function DrawingPage({
             onClick={handleSubmit}
             className="text-xs px-2.5 py-1.5 rounded-lg bg-green-500 text-white font-semibold flex items-center gap-1 active:bg-green-400"
           >
-            <Check size={13} /> 送出
+            <Check size={13} />
+            送出
           </button>
 
           <button
@@ -449,7 +746,6 @@ export default function DrawingPage({
         </div>
       </div>
 
-      {/* Canvas — fills everything below header */}
       <div
         ref={containerRef}
         className="flex-1 relative overflow-hidden"
@@ -458,94 +754,91 @@ export default function DrawingPage({
           ref={canvasRef}
           className="absolute inset-0 w-full h-full"
           style={{
-            touchAction: 'none',
-            display: 'block',
-            backgroundColor: canvasBg,
-            transition: 'background-color 1s ease',
+            touchAction: "none",
+            display: "block",
+            backgroundColor:
+              canvasBg,
+            transition:
+              "background-color 1s ease",
           }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onWheel={handleWheel}
+          onPointerDown={
+            handlePointerDown
+          }
+          onPointerMove={
+            handlePointerMove
+          }
+          onPointerUp={
+            handlePointerUp
+          }
+          onPointerCancel={
+            handlePointerUp
+          }
+          onWheel={
+            handleWheel
+          }
         />
 
-        {debugInfo && (
-          <div className="absolute top-2 left-2 z-30 pointer-events-none rounded-lg bg-black/70 px-3 py-2 font-mono text-xs text-white/90">
-            <div>
-              container: {debugInfo.containerWidth} × {debugInfo.containerHeight}
+        {showPrev &&
+          prevPageUrl && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
+              <img
+                src={prevPageUrl}
+                className="max-w-full max-h-full object-contain"
+                alt="上一頁"
+              />
             </div>
-            <div>
-              canvas: {debugInfo.canvasWidth} × {debugInfo.canvasHeight}
-            </div>
-            <div>
-              rect: {debugInfo.rectWidth} × {debugInfo.rectHeight}
-            </div>
-            <div>
-              dpr: {debugInfo.dpr}
-            </div>
-            <div>
-              camera: {debugInfo.cameraX}, {debugInfo.cameraY}
-            </div>
-            <div>
-              zoom: {debugInfo.cameraZoom}
-            </div>
-          </div>
-        )}
-
-        {/* Previous page overlay */}
-        {showPrev && prevPageUrl && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
-            <img
-              src={prevPageUrl}
-              className="max-w-full max-h-full object-contain"
-              alt="上一頁"
-            />
-          </div>
-        )}
+          )}
       </div>
 
-      {/* Tool FAB */}
       <div
         className="fixed right-4 z-20"
         style={{
-          bottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
+          bottom:
+            "calc(1.5rem + env(safe-area-inset-bottom))",
         }}
       >
         {toolOpen && (
           <div className="mb-3 bg-slate-900/95 backdrop-blur-sm rounded-2xl p-4 shadow-2xl border border-slate-700/50 min-w-[220px]">
-            {/* Color picker */}
             <div className="mb-3">
               <div className="text-slate-400 text-xs mb-2 uppercase tracking-wider">
                 顏色
               </div>
 
               <div className="grid grid-cols-5 gap-1.5">
-                {COLORS.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => {
-                      setColor(c);
-                      setIsEraser(false);
-                    }}
-                    className={`w-9 h-9 rounded-lg border-2 transition-transform active:scale-90 ${
-                      color === c && !isEraser
-                        ? 'border-white scale-110'
-                        : 'border-transparent'
-                    }`}
-                    style={{
-                      backgroundColor: c,
-                      boxShadow: c === '#ffffff'
-                        ? 'inset 0 0 0 1px #64748b'
-                        : undefined,
-                    }}
-                  />
-                ))}
+                {COLORS.map(
+                  (itemColor) => (
+                    <button
+                      key={itemColor}
+                      onClick={() => {
+                        setColor(
+                          itemColor
+                        );
+                        setIsEraser(
+                          false
+                        );
+                      }}
+                      className={`w-9 h-9 rounded-lg border-2 transition-transform active:scale-90 ${
+                        color ===
+                          itemColor &&
+                        !isEraser
+                          ? "border-white scale-110"
+                          : "border-transparent"
+                      }`}
+                      style={{
+                        backgroundColor:
+                          itemColor,
+                        boxShadow:
+                          itemColor ===
+                          "#ffffff"
+                            ? "inset 0 0 0 1px #64748b"
+                            : undefined,
+                      }}
+                    />
+                  )
+                )}
               </div>
             </div>
 
-            {/* Brush size */}
             <div className="mb-3">
               <div className="text-slate-400 text-xs mb-2 uppercase tracking-wider">
                 筆刷大小 ({brushSize})
@@ -553,7 +846,15 @@ export default function DrawingPage({
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setBrushSize(s => Math.max(1, s - 2))}
+                  onClick={() =>
+                    setBrushSize(
+                      (size) =>
+                        Math.max(
+                          1,
+                          size - 2
+                        )
+                    )
+                  }
                   className="w-8 h-8 rounded-lg bg-slate-700 text-white flex items-center justify-center active:bg-slate-600"
                 >
                   <Minus size={14} />
@@ -563,13 +864,28 @@ export default function DrawingPage({
                   <div
                     className="h-full bg-sky-400 rounded-full transition-all"
                     style={{
-                      width: `${(brushSize / 30) * 100}%`,
+                      width:
+                        `${
+                          (
+                            brushSize /
+                            30
+                          ) *
+                          100
+                        }%`,
                     }}
                   />
                 </div>
 
                 <button
-                  onClick={() => setBrushSize(s => Math.min(30, s + 2))}
+                  onClick={() =>
+                    setBrushSize(
+                      (size) =>
+                        Math.min(
+                          30,
+                          size + 2
+                        )
+                    )
+                  }
                   className="w-8 h-8 rounded-lg bg-slate-700 text-white flex items-center justify-center active:bg-slate-600"
                 >
                   <Plus size={14} />
@@ -577,50 +893,81 @@ export default function DrawingPage({
               </div>
             </div>
 
-            {/* Eraser */}
             <button
               onClick={() => {
-                setIsEraser(e => !e);
-                setMoveMode(false);
+                setIsEraser(
+                  (value) =>
+                    !value
+                );
+
+                setMoveMode(
+                  false
+                );
               }}
               className={`w-full flex items-center gap-2 py-2 px-3 rounded-xl text-sm font-medium transition-colors ${
                 isEraser
-                  ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-                  : 'bg-slate-700/60 text-slate-300 border border-slate-600/30'
+                  ? "bg-red-500/20 text-red-300 border border-red-500/30"
+                  : "bg-slate-700/60 text-slate-300 border border-slate-600/30"
               }`}
             >
               <Eraser size={16} />
-              橡皮擦 {isEraser ? '(使用中)' : ''}
+              橡皮擦{" "}
+              {isEraser
+                ? "(使用中)"
+                : ""}
             </button>
 
-            {/* Move Mode */}
             <button
               onClick={() => {
-                setMoveMode(m => !m);
-                setIsEraser(false);
-                setIsDrawing(false);
+                setMoveMode(
+                  (value) =>
+                    !value
+                );
+
+                setIsEraser(
+                  false
+                );
+
+                drawingEngineRef.current
+                  ?.endDrawing();
+
+                setIsDrawing(
+                  false
+                );
               }}
               className={`w-full mt-2 flex items-center gap-2 py-2 px-3 rounded-xl text-sm font-medium transition-colors ${
                 moveMode
-                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                  : 'bg-slate-700/60 text-slate-300 border border-slate-600/30'
+                  ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                  : "bg-slate-700/60 text-slate-300 border border-slate-600/30"
               }`}
             >
               <Flag size={16} />
-              移動畫布 {moveMode ? '(使用中)' : ''}
+              移動畫布{" "}
+              {moveMode
+                ? "(使用中)"
+                : ""}
             </button>
           </div>
         )}
 
         <button
-          onClick={() => setToolOpen(o => !o)}
+          onClick={() =>
+            setToolOpen(
+              (value) =>
+                !value
+            )
+          }
           className={`w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-all active:scale-90 ${
             toolOpen
-              ? 'bg-slate-800 text-white border-2 border-slate-600'
-              : 'bg-gradient-to-br from-sky-500 to-cyan-500 text-white'
+              ? "bg-slate-800 text-white border-2 border-slate-600"
+              : "bg-gradient-to-br from-sky-500 to-cyan-500 text-white"
           }`}
         >
-          {toolOpen ? <X size={22} /> : <Palette size={22} />}
+          {toolOpen ? (
+            <X size={22} />
+          ) : (
+            <Palette size={22} />
+          )}
         </button>
       </div>
     </div>

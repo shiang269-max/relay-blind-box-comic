@@ -9,20 +9,14 @@ export class Pointer {
     const rect =
       canvas.getBoundingClientRect();
 
-    const scaleX =
-      canvas.width / rect.width;
-
-    const scaleY =
-      canvas.height / rect.height;
-
     return {
       x:
-        (event.clientX - rect.left) *
-        scaleX,
+        event.clientX -
+        rect.left,
 
       y:
-        (event.clientY - rect.top) *
-        scaleY,
+        event.clientY -
+        rect.top,
     };
   }
 
@@ -70,8 +64,11 @@ export class Pointer {
     b: Point
   ): Point {
     return {
-      x: (a.x + b.x) / 2,
-      y: (a.y + b.y) / 2,
+      x:
+        (a.x + b.x) / 2,
+
+      y:
+        (a.y + b.y) / 2,
     };
   }
 }
