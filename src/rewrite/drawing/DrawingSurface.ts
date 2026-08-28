@@ -13,14 +13,7 @@ export interface SurfaceOptions {
   background: string;
 }
 
-/**
- * 唯一負責畫布座標、世界像素與渲染的 Surface。
- *
- * baseCanvas：上一頁傳遞而來的不可修改底圖。
- * strokeCanvas：目前玩家的可序列化筆劃。
- *
- * 兩層分離後，載入／還原目前玩家筆劃時不會清掉上一頁畫面。
- */
+/** 唯一負責畫布座標、世界像素與渲染的 Surface。 */
 export class DrawingSurface {
   readonly camera: Camera;
   private readonly baseCanvas: HTMLCanvasElement;
@@ -122,6 +115,7 @@ export class DrawingSurface {
       image.onerror = () => reject(new Error("上一頁圖片載入失敗"));
       image.src = source;
     });
+    this.endStroke();
     this.baseContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
     this.baseContext.drawImage(image, 0, 0, this.options.worldWidth, this.options.worldHeight);
     this.render();
@@ -131,8 +125,6 @@ export class DrawingSurface {
     const ctx = this.viewportContext;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
-    ctx.fillStyle = this.options.background;
-    ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
     ctx.setTransform(
       this.dpr * this.camera.zoom, 0, 0, this.dpr * this.camera.zoom,
       -this.camera.x * this.dpr * this.camera.zoom,
