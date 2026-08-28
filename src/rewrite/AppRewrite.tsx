@@ -36,7 +36,7 @@ function AppRewrite() {
   const [viewportHeight, setViewportHeight] = useState(getSafeViewportHeight);
 
   const roomState = useRoom({ roomId, playerId, playerName });
-  const { room, players, isHost, loading, start, submit } = roomState;
+  const { room, players, isHost, loading, start, submit, leave } = roomState;
 
   useEffect(() => {
     const updateViewport = () => setViewportHeight(getSafeViewportHeight());
@@ -78,6 +78,11 @@ function AppRewrite() {
     window.location.hash = normalized;
   }, []);
 
+  const handleLeaveGame = useCallback(() => {
+    void leave();
+    setScreen("lobby");
+  }, [leave]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center bg-slate-950 text-white" style={{ minHeight: viewportHeight }}>
@@ -118,7 +123,7 @@ function AppRewrite() {
         roomId={roomId}
         playerId={playerId}
         playerName={playerName}
-        onLeaveGame={() => setScreen("lobby")}
+        onLeaveGame={handleLeaveGame}
       />
     );
   }
