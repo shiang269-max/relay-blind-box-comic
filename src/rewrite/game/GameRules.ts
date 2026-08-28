@@ -3,6 +3,10 @@ import type {
   RoomState,
 } from "../domain";
 import { getGameFlow } from "./getGameFlow";
+import {
+  appendRelayPage,
+  type RelayModeState,
+} from "./RelayModeState";
 
 export function orderPlayers(
   players: Record<string, Player> | undefined
@@ -27,7 +31,7 @@ export function canStartGame(
   playerId: string
 ): boolean {
   if (!room) return false;
-  if (room.phase !== "lobby") return false;
+  if (room.game.phase !== "lobby") return false;
 
   return getHostId(room) === playerId;
 }
@@ -37,43 +41,53 @@ export function canSubmitRound(
   playerId: string
 ): boolean {
   if (!room) return false;
-  if (room.phase !== "playing") return false;
+  if (room.game.phase !== "playing") return false;
 
-  return room.currentPlayerId === playerId;
+  return room.game.currentPlayerId === playerId;
 }
 
 /**
- * 寫入目前繪圖結果後，由模式流程決定下一個狀態。
+ * 接力模式目前的送出規則。
  *
- * RoomRepository 不再知道 30 頁、上一頁、輪替玩家等模式規則。
+ * 模式專屬 pages 寫入 RelayModeState，
+ * 共用 RoomState 不再直接持有 pages。
  */
 export function nextRoundState(
   room: RoomState,
   pageDataUrl: string
 ): RoomState | null {
-  if (room.phase !== "playing") return null;
+  if (room.game.phase !== "playing") return null;
 
   const players = orderPlayers(room.players);
   if (players.length === 0) return null;
 
-  const flow = getGameFlow(room.mode);
+  const flow = getGameFlow(room.game.mode);
 
   const next = flow.getNextState({
-    currentRound: room.currentRound,
-    currentPlayerId: room.currentPlayerId,
+    currentRound: room.game.currentTurn,
+    currentPlayerId: room.game.currentPlayerId,
     playerIds: players.map((player) => player.id),
   });
 
-  const pages = {
-    ...(room.pages ?? {}),
-    [String(room.currentRound)]: pageDataUrl,
-  };
+  if (room.game.mode !== "relay-30") {
+    throw new Error("目前尚未實作此模式的送出規則");
+  }
+
+  const relayState = room.game.modeState as RelayModeState;
+  const nextModeState = appendRelayPage(
+    relayState,
+    room.game.currentTurn,
+    pageDataUrl
+  );
 
   return {
     ...room,
-    pages,
-    phase: next.phase,
-    currentRound: next.currentRound,
-    currentPlayerId: next.currentPlayerId,
+    game: {
+      ...room.game,
+      modeState: nextModeState,
+      phase: next.phase,
+      currentTurn: next.currentRound,
+      currentPlayerId: next.currentPlayerId,
+    },
   };
 }
