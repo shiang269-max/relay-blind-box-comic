@@ -1,7 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ref, set } from "firebase/database";
 import { db } from "../lib/firebase";
 import { type Comic, type Player, type RoomState } from "./domain";
+import { watchRelayPages } from "./data/RoomRepository";
 import { getGameFlow } from "./game/getGameFlow";
 import { getGameMode } from "./game/GameMode";
 import { asRelayModeState } from "./game/GameRules";
@@ -28,19 +29,31 @@ export default function GameRouter({
   playerName,
   onLeaveGame,
 }: GameRouterProps) {
+  const [relayPages, setRelayPages] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setRelayPages({});
+    return watchRelayPages(roomId, setRelayPages);
+  }, [roomId]);
+
+  const legacyRelayPages = useMemo(() => {
+    if (!room || (room.game.mode ?? "relay-30") !== "relay-30") return {};
+    return asRelayModeState(room.game).pages;
+  }, [room]);
+
+  const pages = Object.keys(relayPages).length > 0 ? relayPages : legacyRelayPages;
+
   const saveComic = useCallback(async (title: string) => {
     if (!room || (room.game.mode ?? "relay-30") !== "relay-30") return;
-
-    const relayState = asRelayModeState(room.game);
 
     await set(ref(db, `comics/${roomId}`), {
       id: roomId,
       title: title.trim() || "未命名漫畫",
       createdAt: room.createdAt ?? Date.now(),
       map: room.map,
-      pages: relayState.pages,
+      pages,
     });
-  }, [room, roomId]);
+  }, [pages, room, roomId]);
 
   if (!room) return null;
 
@@ -56,14 +69,13 @@ export default function GameRouter({
         return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={room.map} />;
       }
 
-      const relayState = asRelayModeState(game);
       const previousKey = flow.getPreviousDrawingKey({
         currentRound: game.currentTurn,
         currentPlayerId: game.currentPlayerId,
         playerIds: players.map((player) => player.id),
       });
 
-      const previousPage = previousKey ? relayState.pages[previousKey] ?? null : null;
+      const previousPage = previousKey ? pages[previousKey] ?? null : null;
 
       return (
         <DrawingScreen
@@ -71,6 +83,7 @@ export default function GameRouter({
           roomId={roomId}
           pageIndex={Math.max(0, game.currentTurn - 1)}
           round={game.currentTurn}
+          playerCount={Math.max(1, players.length)}
           map={room.map}
           playerName={playerName}
           previousPage={previousPage}
@@ -96,16 +109,23 @@ export default function GameRouter({
       return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={room.map} />;
     }
 
-    const relayState = asRelayModeState(game);
     const comic: Comic = {
       id: roomId,
       title: "本局成果",
       createdAt: room.createdAt ?? Date.now(),
       map: room.map,
-      pages: relayState.pages,
+      pages,
     };
 
-    return <ReviewPage comic={comic} map={room.map} onBack={onLeaveGame} onSave={saveComic} />;
+    return (
+      <ReviewPage
+        comic={comic}
+        map={room.map}
+        totalPages={mode.totalRounds ?? Object.keys(pages).length}
+        onBack={onLeaveGame}
+        onSave={saveComic}
+      />
+    );
   }
 
   return <WaitingPage round={game.currentTurn ?? 1} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="等待遊戲狀態" map={room.map} />;
