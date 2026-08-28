@@ -64,7 +64,6 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
 
     autosaveRunningRef.current = true;
     setAutosaveState("saving");
-
     try {
       await lifecycle.saveSnapshot();
       setAutosaveState("saved");
@@ -81,10 +80,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
   }, []);
 
   const scheduleAutosave = useCallback(() => {
-    if (autosaveTimerRef.current !== null) {
-      window.clearTimeout(autosaveTimerRef.current);
-    }
-
+    if (autosaveTimerRef.current !== null) window.clearTimeout(autosaveTimerRef.current);
     setAutosaveState((current) => current === "saving" ? current : "idle");
     autosaveTimerRef.current = window.setTimeout(() => {
       autosaveTimerRef.current = null;
@@ -139,21 +135,23 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        if (autosaveTimerRef.current !== null) {
-          window.clearTimeout(autosaveTimerRef.current);
-          autosaveTimerRef.current = null;
-        }
-        void saveSnapshotNow();
+      if (document.visibilityState !== "hidden") return;
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
       }
+      void saveSnapshotNow();
     };
-
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [saveSnapshotNow]);
 
   const { handlePointerDown, handlePointerMove, finishPointer, handleWheel } = useDrawingInteraction({
-    surfaceRef, sessionRef, brush, moveMode, onStrokeEnd: scheduleAutosave,
+    surfaceRef,
+    sessionRef,
+    brush,
+    moveMode,
+    onStrokeEnd: scheduleAutosave,
   });
 
   const handleSubmit = async () => {
@@ -163,7 +161,6 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
 
     setSubmitting(true);
     setSubmitError(null);
-
     try {
       if (autosaveTimerRef.current !== null) {
         window.clearTimeout(autosaveTimerRef.current);
@@ -174,7 +171,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
       const committed = await onSubmit(session.exportPng());
 
       if (!committed) {
-        setSubmitError("目前回合已經變更，作品暫存已保留，請等待最新房間狀態。\n");
+        setSubmitError("目前回合已經變更，作品暫存已保留，請等待最新房間狀態。");
         return;
       }
 
