@@ -1,52 +1,26 @@
 import type { Brush, DrawingSurface } from "./DrawingSurface";
 import type { Point } from "./Camera";
-import {
-  appendStrokePoint,
-  createStroke,
-  type Stroke,
-} from "./Stroke";
+import { appendStrokePoint, createStroke, type Stroke } from "./Stroke";
 
 export type DrawingSessionListener = (stroke: Stroke) => void;
 
-/**
- * 共用繪圖 Session。
- *
- * 職責固定為：
- * - 管理目前筆劃
- * - 將 world point 交給 DrawingSurface 即時渲染
- * - 保留可序列化 Stroke，供 Firebase 同步與未來重播使用
- *
- * Session 不知道目前是 30 頁接力還是世界模式。
- */
 export class DrawingSession {
   private activeStroke: Stroke | null = null;
   private readonly strokes: Stroke[] = [];
   private readonly listeners = new Set<DrawingSessionListener>();
   private nextStrokeId = 1;
 
-  constructor(
-    private readonly surface: DrawingSurface
-  ) {}
+  constructor(private readonly surface: DrawingSurface) {}
 
   begin(point: Point, brush: Brush): boolean {
     this.end();
-
-    if (!this.surface.startStroke(point, brush)) {
-      return false;
-    }
-
-    this.activeStroke = createStroke(
-      this.createStrokeId(),
-      brush,
-      point
-    );
-
+    if (!this.surface.startStroke(point, brush)) return false;
+    this.activeStroke = createStroke(this.createStrokeId(), brush, point);
     return true;
   }
 
   move(point: Point, brush: Brush): void {
     if (!this.activeStroke) return;
-
     this.surface.continueStroke(point, brush);
     appendStrokePoint(this.activeStroke, point);
   }
@@ -56,11 +30,9 @@ export class DrawingSession {
       this.surface.endStroke();
       return;
     }
-
     const completed = this.activeStroke;
     this.activeStroke = null;
     this.surface.endStroke();
-
     this.strokes.push(completed);
     this.emit(completed);
   }
@@ -76,16 +48,21 @@ export class DrawingSession {
     this.surface.clear();
   }
 
+  replaceStrokes(strokes: readonly Stroke[]): void {
+    this.activeStroke = null;
+    this.surface.endStroke();
+    this.strokes.length = 0;
+    this.strokes.push(...strokes.map(cloneStroke));
+    this.surface.redraw(this.strokes);
+  }
+
   getStrokes(): readonly Stroke[] {
-    return this.strokes;
+    return this.strokes.map(cloneStroke);
   }
 
   subscribe(listener: DrawingSessionListener): () => void {
     this.listeners.add(listener);
-
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return () => this.listeners.delete(listener);
   }
 
   exportPng(): string {
@@ -94,14 +71,20 @@ export class DrawingSession {
   }
 
   private emit(stroke: Stroke): void {
-    for (const listener of this.listeners) {
-      listener(stroke);
-    }
+    const snapshot = cloneStroke(stroke);
+    for (const listener of this.listeners) listener(snapshot);
   }
 
   private createStrokeId(): string {
-    const id = this.nextStrokeId;
-    this.nextStrokeId += 1;
+    const id = this.nextStrokeId++;
     return `stroke-${Date.now()}-${id}`;
   }
+}
+
+function cloneStroke(stroke: Stroke): Stroke {
+  return {
+    id: stroke.id,
+    brush: { ...stroke.brush },
+    points: stroke.points.map((point) => ({ ...point })),
+  };
 }
