@@ -28,11 +28,16 @@ export interface RoomState {
   createdAt: number;
 }
 
+/**
+ * 已完成的漫畫成果。
+ * map 保存在成果資料本身，讓歷史作品不需要依賴已經不存在的房間。
+ */
 export interface Comic {
   id: string;
   title: string;
   createdAt: number;
   pages: Record<string, string>;
+  map?: MapType;
 }
 
 export function generateId(length: number): string {
