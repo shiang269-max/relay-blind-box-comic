@@ -5,6 +5,7 @@ import GameAtmosphere from "../visuals/GameAtmosphere";
 interface ReviewPageProps {
   comic: Comic;
   map: MapType;
+  totalPages?: number;
   onBack: () => void;
   onSave?: (title: string) => Promise<void>;
   readOnly?: boolean;
@@ -13,21 +14,25 @@ interface ReviewPageProps {
 export default function ReviewPage({
   comic,
   map,
+  totalPages,
   onBack,
   onSave,
   readOnly = false,
 }: ReviewPageProps) {
-  const pageNumbers = useMemo(
-    () => Object.keys(comic.pages).map(Number).sort((a, b) => a - b),
-    [comic.pages]
-  );
+  const pageNumbers = useMemo(() => {
+    if (totalPages && totalPages > 0) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+    return Object.keys(comic.pages).map(Number).sort((a, b) => a - b);
+  }, [comic.pages, totalPages]);
   const [index, setIndex] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [title, setTitle] = useState(comic.title);
-  const page = pageNumbers[index];
-  const round = page ?? Math.max(1, index + 1);
+  const page = pageNumbers[index] ?? index + 1;
+  const round = page;
+  const pageImage = comic.pages[String(page)] ?? null;
 
   const save = async () => {
     if (!onSave || saving) return;
@@ -90,7 +95,7 @@ export default function ReviewPage({
             placeholder="為這部漫畫命名"
           />
           {saved && <p className="mt-2 text-center text-xs text-emerald-200/80">這場接力已經正式封存到漫畫檔案庫。</p>}
-          {saveError && <p className="mt-2 text-center text-xs text-red-200">{saveError}</p>}
+          {saveError && <p className="mt-2 text-center text-xs text-red-200">保存失敗，請確認網路後再試一次。</p>}
         </div>
       )}
 
@@ -98,16 +103,16 @@ export default function ReviewPage({
         <div className="flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-white/15 bg-slate-950/35 shadow-2xl backdrop-blur-md">
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-xs text-white/45">
             <span>FINAL RELAY</span>
-            <span>PAGE {page ?? 0} / {pageNumbers.length}</span>
+            <span>PAGE {page} / {pageNumbers.length}</span>
           </div>
           <div className="flex min-h-0 flex-1 items-center justify-center p-3">
-            {page ? (
+            {pageImage ? (
               <img
-                src={comic.pages[String(page)]}
+                src={pageImage}
                 className="max-h-full max-w-full rounded-2xl object-contain shadow-2xl"
                 alt={`第 ${page} 頁`}
               />
-            ) : <span className="text-white/40">沒有頁面</span>}
+            ) : <span className="text-white/40">第 {page} 頁尚未載入完成</span>}
           </div>
         </div>
       </main>
@@ -121,7 +126,7 @@ export default function ReviewPage({
           上一頁
         </button>
         <div className="text-center text-xs text-white/50">
-          <div className="font-black text-white">{page ?? 0} / {pageNumbers.length}</div>
+          <div className="font-black text-white">{page} / {pageNumbers.length}</div>
           <div className="mt-1 text-[10px] tracking-[0.16em] text-white/30">TAP TO EXPLORE</div>
         </div>
         <button
