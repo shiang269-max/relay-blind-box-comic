@@ -1,7 +1,6 @@
 import type { Player, RoomState } from "../domain";
 import { getGameFlow } from "./getGameFlow";
 import {
-  appendRelayPage,
   createRelayModeState,
   type RelayModeState,
 } from "./RelayModeState";
@@ -48,7 +47,14 @@ export function recoverMissingCurrentPlayer(room: RoomState): RoomState | null {
   };
 }
 
-export function nextRoundState(room: RoomState, pageDataUrl: string): RoomState | null {
+/**
+ * 推進遊戲流程只處理小型狀態。
+ *
+ * 30 頁圖片本身不能再塞進 room transaction，否則每次送出都會把所有歷史
+ * 累積快照一起帶進交易，資料量會隨回合數倍增。頁面內容由 Repository 存在
+ * 獨立的 relayPages 路徑，流程狀態只保存「現在輪到誰、進度到哪裡」。
+ */
+export function nextRoundState(room: RoomState): RoomState | null {
   if (room.game.phase !== "playing") return null;
 
   const players = orderPlayers(room.players);
@@ -66,19 +72,11 @@ export function nextRoundState(room: RoomState, pageDataUrl: string): RoomState 
     throw new Error("目前尚未實作此模式的送出規則");
   }
 
-  const relayState = asRelayModeState(room.game);
-  const nextModeState = appendRelayPage(
-    relayState,
-    room.game.currentTurn,
-    pageDataUrl
-  );
-
   return {
     ...room,
     game: {
       ...room.game,
       mode,
-      modeState: nextModeState,
       phase: next.phase,
       currentTurn: next.currentRound,
       currentPlayerId: next.currentPlayerId,
@@ -87,8 +85,8 @@ export function nextRoundState(room: RoomState, pageDataUrl: string): RoomState 
 }
 
 /**
- * Backward-compatible reader for rooms created before modeState was persisted.
- * The default 30-page mode starts with an empty page collection.
+ * Backward-compatible reader for rooms created before relay pages moved to
+ * their dedicated Firebase path.
  */
 export function asRelayModeState(game: GameState): RelayModeState {
   if (isRelayModeState(game.modeState)) return game.modeState;
