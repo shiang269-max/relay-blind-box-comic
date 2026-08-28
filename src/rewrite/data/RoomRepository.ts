@@ -41,9 +41,36 @@ export async function upsertPlayer(
   roomId: string,
   player: Player
 ): Promise<void> {
-  await set(
-    ref(db, `rooms/${roomId}/players/${player.id}`),
-    player
+  await runTransaction(
+    roomRef(roomId),
+    (current: RoomState | null) => {
+      if (!current) {
+        const mode = getDefaultGameMode();
+        const game = createGameState(mode, null);
+
+        if (mode === "relay-30") {
+          game.modeState = createRelayModeState();
+        }
+
+        return {
+          map: "earth",
+          game,
+          players: {
+            [player.id]: player,
+          },
+          createdAt: Date.now(),
+        } satisfies RoomState;
+      }
+
+      return {
+        ...current,
+        players: {
+          ...current.players,
+          [player.id]: player,
+        },
+      } satisfies RoomState;
+    },
+    { applyLocally: false }
   );
 }
 
