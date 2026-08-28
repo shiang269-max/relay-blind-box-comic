@@ -20,7 +20,7 @@ interface DrawingScreenProps {
   map: MapType;
   playerName: string;
   previousPage: string | null;
-  onSubmit: (dataUrl: string) => Promise<void> | void;
+  onSubmit: (dataUrl: string) => Promise<boolean> | boolean;
 }
 
 export default function DrawingScreen({ mode, roomId, pageIndex, round, map, playerName, previousPage, onSubmit }: DrawingScreenProps) {
@@ -39,6 +39,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
   const [moveMode, setMoveMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [loadingDrawing, setLoadingDrawing] = useState(true);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved">("idle");
 
   const time = getTimeOfDay(round);
@@ -84,12 +85,12 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
       window.clearTimeout(autosaveTimerRef.current);
     }
 
-    autosaveState !== "saving" && setAutosaveState("idle");
+    setAutosaveState((current) => current === "saving" ? current : "idle");
     autosaveTimerRef.current = window.setTimeout(() => {
       autosaveTimerRef.current = null;
       void saveSnapshotNow();
     }, 500);
-  }, [autosaveState, saveSnapshotNow]);
+  }, [saveSnapshotNow]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -98,6 +99,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
     let cancelled = false;
     setLoadingDrawing(true);
     setAutosaveState("idle");
+    setSubmitError(null);
 
     const surface = new DrawingSurface(canvas, { worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT, background });
     const session = new DrawingSession(surface);
@@ -158,15 +160,28 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
     const session = sessionRef.current;
     const lifecycle = lifecycleRef.current;
     if (!session || !lifecycle || submitting || loadingDrawing) return;
+
     setSubmitting(true);
+    setSubmitError(null);
+
     try {
       if (autosaveTimerRef.current !== null) {
         window.clearTimeout(autosaveTimerRef.current);
         autosaveTimerRef.current = null;
       }
+
       await lifecycle.saveSnapshot();
-      await onSubmit(session.exportPng());
+      const committed = await onSubmit(session.exportPng());
+
+      if (!committed) {
+        setSubmitError("目前回合已經變更，作品暫存已保留，請等待最新房間狀態。\n");
+        return;
+      }
+
       await lifecycle.clear();
+    } catch (error) {
+      console.error("送出回合失敗", error);
+      setSubmitError("送出失敗，作品暫存已保留，可以重新嘗試。");
     } finally {
       setSubmitting(false);
     }
@@ -189,6 +204,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, map, pla
           <button onClick={handleSubmit} disabled={submitting || loadingDrawing} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-green-500/90 px-4 text-sm font-bold shadow-lg shadow-green-950/30 disabled:opacity-50"><Check size={18} />{loadingDrawing ? "載入中" : submitting ? "送出中" : "送出"}</button>
         </div>
         {progress !== null && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-amber-200 to-indigo-300 transition-[width] duration-700" style={{ width: `${progress}%` }} /></div>}
+        {submitError && <div className="mt-2 rounded-xl border border-red-300/20 bg-red-950/45 px-3 py-2 text-xs text-red-100">{submitError}</div>}
       </header>
 
       <main ref={containerRef} className="relative z-10 min-h-0 flex-1 overflow-hidden">
