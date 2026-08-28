@@ -23,18 +23,11 @@ import { useDrawingInteraction } from "./drawing/useDrawingInteraction";
 import { RelayPageDrawingAdapter } from "./modes/RelayPageDrawingAdapter";
 import { RelayPageDrawingLifecycle } from "./modes/RelayPageDrawingLifecycle";
 import { FirebaseDrawingPersistence } from "./persistence/FirebaseDrawingPersistence";
+import GameAtmosphere from "./visuals/GameAtmosphere";
 
 const COLORS = [
-  "#000000",
-  "#ffffff",
-  "#ef4444",
-  "#f97316",
-  "#eab308",
-  "#22c55e",
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
-  "#14b8a6",
+  "#000000", "#ffffff", "#ef4444", "#f97316", "#eab308",
+  "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6",
 ];
 
 interface DrawingScreenProps {
@@ -48,16 +41,7 @@ interface DrawingScreenProps {
   onSubmit: (dataUrl: string) => Promise<void> | void;
 }
 
-export default function DrawingScreen({
-  mode,
-  roomId,
-  pageIndex,
-  round,
-  map,
-  playerName,
-  previousPage,
-  onSubmit,
-}: DrawingScreenProps) {
+export default function DrawingScreen({ mode, roomId, pageIndex, round, map, playerName, previousPage, onSubmit }: DrawingScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<DrawingSurface | null>(null);
@@ -74,11 +58,7 @@ export default function DrawingScreen({
   const time = getTimeOfDay(round);
   const background = getBackgroundColor(map, time);
 
-  const brush = useCallback((): Brush => ({
-    color,
-    size,
-    eraser,
-  }), [color, size, eraser]);
+  const brush = useCallback((): Brush => ({ color, size, eraser }), [color, size, eraser]);
 
   const resize = useCallback(() => {
     const element = containerRef.current;
@@ -100,11 +80,7 @@ export default function DrawingScreen({
       background,
     });
     const session = new DrawingSession(surface);
-    const adapter = new RelayPageDrawingAdapter({
-      roomId,
-      pageIndex,
-      persistence: new FirebaseDrawingPersistence(),
-    });
+    const adapter = new RelayPageDrawingAdapter({ roomId, pageIndex, persistence: new FirebaseDrawingPersistence() });
     const lifecycle = new RelayPageDrawingLifecycle(session, adapter);
 
     surfaceRef.current = surface;
@@ -114,10 +90,7 @@ export default function DrawingScreen({
 
     const initialize = async () => {
       try {
-        if (previousPage) {
-          await surface.loadImage(previousPage);
-        }
-
+        if (previousPage) await surface.loadImage(previousPage);
         await lifecycle.initialize();
       } finally {
         if (!cancelled) setLoadingDrawing(false);
@@ -140,25 +113,15 @@ export default function DrawingScreen({
     };
   }, [background, pageIndex, previousPage, resize, roomId]);
 
-  const {
-    handlePointerDown,
-    handlePointerMove,
-    finishPointer,
-    handleWheel,
-  } = useDrawingInteraction({
-    surfaceRef,
-    sessionRef,
-    brush,
-    moveMode,
+  const { handlePointerDown, handlePointerMove, finishPointer, handleWheel } = useDrawingInteraction({
+    surfaceRef, sessionRef, brush, moveMode,
   });
 
   const handleSubmit = async () => {
     const session = sessionRef.current;
     const lifecycle = lifecycleRef.current;
     if (!session || !lifecycle || submitting || loadingDrawing) return;
-
     setSubmitting(true);
-
     try {
       await lifecycle.saveSnapshot();
       await onSubmit(session.exportPng());
@@ -168,165 +131,56 @@ export default function DrawingScreen({
     }
   };
 
-  const progress = mode.totalRounds === null
-    ? null
-    : Math.min(100, (round / mode.totalRounds) * 100);
-
-  const roundLabel = mode.totalRounds === null
-    ? `第 ${round} 回合`
-    : `第 ${round}/${mode.totalRounds} 頁`;
+  const progress = mode.totalRounds === null ? null : Math.min(100, (round / mode.totalRounds) * 100);
+  const roundLabel = mode.totalRounds === null ? `第 ${round} 回合` : `第 ${round}/${mode.totalRounds} 頁`;
+  const timeLabel = time === "day" ? "白天" : time === "dusk" ? "黃昏" : "夜晚";
 
   return (
     <div
-      className="flex w-screen flex-col overflow-hidden"
-      style={{
-        height: "var(--app-height, 100svh)",
-        background,
-        paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: "env(safe-area-inset-bottom)",
-      }}
+      className="relative flex w-screen flex-col overflow-hidden text-white"
+      style={{ height: "var(--app-height, 100svh)", background, paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <header className="shrink-0 border-b border-white/10 bg-black/35 px-3 py-2 text-white backdrop-blur">
+      <GameAtmosphere map={map} round={round} />
+
+      <header className="relative z-10 shrink-0 border-b border-white/10 bg-slate-950/35 px-3 py-2 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold">{playerName} 的回合</div>
-            <div className="truncate text-xs text-white/70">
-              {mode.label} · {roundLabel}
-            </div>
+            <div className="truncate text-xs text-white/70">{mode.label} · {roundLabel} · {timeLabel}</div>
           </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || loadingDrawing}
-            className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-green-500 px-4 text-sm font-bold shadow disabled:opacity-50"
-          >
+          <button onClick={handleSubmit} disabled={submitting || loadingDrawing} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-green-500/90 px-4 text-sm font-bold shadow-lg shadow-green-950/30 disabled:opacity-50">
             <Check size={18} />
             {loadingDrawing ? "載入中" : submitting ? "送出中" : "送出"}
           </button>
         </div>
-
         {progress !== null && (
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
-            <div
-              className="h-full rounded-full bg-white/80 transition-[width]"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-amber-200 to-indigo-300 transition-[width] duration-700" style={{ width: `${progress}%` }} />
           </div>
         )}
       </header>
 
-      <main ref={containerRef} className="relative min-h-0 flex-1">
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 block h-full w-full touch-none select-none"
-          style={{ touchAction: "none" }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={finishPointer}
-          onPointerCancel={finishPointer}
-          onWheel={handleWheel}
-        />
-
-        {loadingDrawing && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-sm font-medium text-white backdrop-blur-sm">
-            載入繪圖資料中...
-          </div>
-        )}
+      <main ref={containerRef} className="relative z-10 min-h-0 flex-1 overflow-hidden">
+        <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full touch-none select-none" style={{ touchAction: "none" }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={finishPointer} onPointerCancel={finishPointer} onWheel={handleWheel} />
+        <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
+        {loadingDrawing && <div className="absolute inset-0 flex items-center justify-center bg-slate-950/35 text-sm font-medium text-white backdrop-blur-sm">載入繪圖資料中...</div>}
       </main>
 
-      <section className="shrink-0 border-t border-white/10 bg-black/45 text-white backdrop-blur">
+      <section className="relative z-10 shrink-0 border-t border-white/10 bg-slate-950/45 text-white backdrop-blur-xl">
         <div className="flex min-h-14 items-center gap-2 overflow-x-auto px-3 py-2 [-webkit-overflow-scrolling:touch]">
-          <button
-            onClick={() => {
-              setMoveMode((value) => !value);
-              setEraser(false);
-            }}
-            className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl ${
-              moveMode ? "bg-sky-500" : "bg-white/10"
-            }`}
-            title="移動畫面"
-            aria-label="移動畫面"
-          >
-            <Move size={20} />
-          </button>
-
-          <button
-            onClick={() => {
-              setEraser((value) => !value);
-              setMoveMode(false);
-            }}
-            className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl ${
-              eraser ? "bg-orange-500" : "bg-white/10"
-            }`}
-            title="橡皮擦"
-            aria-label="橡皮擦"
-          >
-            <Eraser size={20} />
-          </button>
-
+          <button onClick={() => { setMoveMode((value) => !value); setEraser(false); }} className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${moveMode ? "bg-sky-500 shadow-lg shadow-sky-950/30" : "bg-white/10"}`} title="移動畫面" aria-label="移動畫面"><Move size={20} /></button>
+          <button onClick={() => { setEraser((value) => !value); setMoveMode(false); }} className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${eraser ? "bg-orange-500 shadow-lg shadow-orange-950/30" : "bg-white/10"}`} title="橡皮擦" aria-label="橡皮擦"><Eraser size={20} /></button>
           <div className="flex shrink-0 items-center gap-1 rounded-xl bg-white/10 px-1">
-            <button
-              onClick={() => setSize((value) => Math.max(1, value - 2))}
-              className="flex min-h-11 min-w-10 items-center justify-center"
-              aria-label="縮小筆刷"
-            >
-              <Minus size={18} />
-            </button>
-
+            <button onClick={() => setSize((value) => Math.max(1, value - 2))} className="flex min-h-11 min-w-10 items-center justify-center" aria-label="縮小筆刷"><Minus size={18} /></button>
             <span className="min-w-8 text-center text-xs font-bold">{size}</span>
-
-            <button
-              onClick={() => setSize((value) => Math.min(100, value + 2))}
-              className="flex min-h-11 min-w-10 items-center justify-center"
-              aria-label="放大筆刷"
-            >
-              <Plus size={18} />
-            </button>
+            <button onClick={() => setSize((value) => Math.min(100, value + 2))} className="flex min-h-11 min-w-10 items-center justify-center" aria-label="放大筆刷"><Plus size={18} /></button>
           </div>
-
-          <button
-            onClick={() => {
-              surfaceRef.current?.camera.reset();
-              surfaceRef.current?.render();
-            }}
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-white/10"
-            title="重設視角"
-            aria-label="重設視角"
-          >
-            <RotateCcw size={19} />
-          </button>
-
-          <button
-            onClick={() => void lifecycleRef.current?.clear()}
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-white/10"
-            title="清除本頁筆劃"
-            aria-label="清除本頁筆劃"
-          >
-            <Trash2 size={19} />
-          </button>
-
+          <button onClick={() => { surfaceRef.current?.camera.reset(); surfaceRef.current?.render(); }} className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-white/10" title="重設視角" aria-label="重設視角"><RotateCcw size={19} /></button>
+          <button onClick={() => void lifecycleRef.current?.clear()} className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-white/10" title="清除本頁筆劃" aria-label="清除本頁筆劃"><Trash2 size={19} /></button>
           <div className="h-8 w-px shrink-0 bg-white/15" />
-
           <Palette size={19} className="shrink-0 text-white/80" />
-
           <div className="flex shrink-0 gap-1.5 pr-1">
-            {COLORS.map((item) => (
-              <button
-                key={item}
-                onClick={() => {
-                  setColor(item);
-                  setEraser(false);
-                  setMoveMode(false);
-                }}
-                className={`h-9 w-9 shrink-0 rounded-full border-2 transition-transform active:scale-90 ${
-                  color === item && !eraser
-                    ? "border-white scale-110"
-                    : "border-white/25"
-                }`}
-                style={{ backgroundColor: item }}
-                aria-label={`選擇顏色 ${item}`}
-              />
-            ))}
+            {COLORS.map((item) => <button key={item} onClick={() => { setColor(item); setEraser(false); setMoveMode(false); }} className={`h-9 w-9 shrink-0 rounded-full border-2 transition-transform active:scale-90 ${color === item && !eraser ? "scale-110 border-white" : "border-white/25"}`} style={{ backgroundColor: item }} aria-label={`選擇顏色 ${item}`} />)}
           </div>
         </div>
       </section>
