@@ -1,4 +1,5 @@
 import {
+  get,
   onDisconnect,
   onValue,
   ref,
@@ -20,6 +21,8 @@ import {
   orderPlayers,
   recoverMissingCurrentPlayer,
 } from "../game/GameRules";
+
+const MAX_RELAY_PAGE_BYTES = 8 * 1024 * 1024;
 
 function roomRef(roomId: string) {
   return ref(db, `rooms/${roomId}`);
@@ -157,20 +160,23 @@ export async function startGame(
 /**
  * 頁面先寫入獨立路徑，再用小型 room transaction 推進回合。
  *
- * 這避免第 N 回合提交時重新寫入 1..N-1 的所有累積圖片，資料量不再隨回合
- * 成倍增加，也避免舊頁因大型 transaction 同步失敗而整批消失。
+ * currentTurn 使用一次性 get() 讀取，不再以 onValue 包 Promise。
+ * 這避免送出流程額外建立監聽器，也讓目前回合的讀取、頁面寫入、回合推進
+ * 都是明確的 await 順序。
  */
 export async function submitRound(roomId: string, playerId: string, pageDataUrl: string): Promise<boolean> {
-  const pageTurnRef = ref(db, `rooms/${roomId}/game/currentTurn`);
-  const turnSnapshot = await new Promise<number | null>((resolve) => {
-    const unsubscribe = onValue(pageTurnRef, (snapshot) => {
-      unsubscribe();
-      const value = snapshot.val();
-      resolve(typeof value === "number" ? value : null);
-    }, { onlyOnce: true });
-  });
+  if (!pageDataUrl.startsWith("data:image/")) {
+    throw new Error("送出作品格式無效");
+  }
 
-  if (!turnSnapshot || turnSnapshot < 1) return false;
+  if (new TextEncoder().encode(pageDataUrl).byteLength > MAX_RELAY_PAGE_BYTES) {
+    throw new Error("作品快照過大，請稍後重新整理後再送出");
+  }
+
+  const pageTurnSnapshot = await get(ref(db, `rooms/${roomId}/game/currentTurn`));
+  const turnSnapshot = pageTurnSnapshot.val();
+
+  if (typeof turnSnapshot !== "number" || turnSnapshot < 1) return false;
 
   await set(ref(db, `relayPages/${roomId}/${turnSnapshot}`), pageDataUrl);
 
