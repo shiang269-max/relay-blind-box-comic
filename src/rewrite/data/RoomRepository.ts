@@ -25,16 +25,22 @@ export async function upsertPlayer(roomId: string, player: Player): Promise<void
     const old = raw ?? null;
     const active = activePlayers(normalizePlayers(old?.players), now);
     if (old && Object.keys(active).length === 0) {
+      // Empty/stale room is a finished room. Recreate it cleanly; never reuse its game state.
       return { players: { [player.id]: { ...player, activeAt: now } }, currentGameId: null, lobby: createDefaultLobbyConfig(), createdAt: now } satisfies RoomState;
     }
     return { ...(old ?? {}), players: { ...active, [player.id]: { ...active[player.id], ...player, joinedAt: active[player.id]?.joinedAt ?? player.joinedAt, activeAt: now } }, currentGameId: old?.currentGameId ?? null, lobby: old?.lobby ?? createDefaultLobbyConfig(), createdAt: old?.createdAt ?? now } satisfies RoomState;
   }, { applyLocally: false });
 }
 
-export async function startPlayerPresence(roomId: string, playerId: string): Promise<void> { await onDisconnect(ref(db, `rooms/${roomId}/players/${playerId}`)).remove(); }
+export async function startPlayerPresence(roomId: string, playerId: string): Promise<void> {
+  const playerRef = ref(db, `rooms/${roomId}/players/${playerId}`);
+  await onDisconnect(playerRef).remove();
+}
 export async function touchPlayer(roomId: string, playerId: string): Promise<void> { await update(ref(db, `rooms/${roomId}/players/${playerId}`), { activeAt: Date.now() }); }
 
 export async function leaveRoom(roomId: string, playerId: string): Promise<boolean> {
+  // A leave is a terminal room operation when it removes the last active participant.
+  // The room record itself is deleted, so the room code cannot resurrect an old game.
   const result = await runTransaction(roomRef(roomId), (raw: RoomState | null) => {
     if (!raw) return raw;
     const players = activePlayers(normalizePlayers(raw.players));
@@ -42,7 +48,16 @@ export async function leaveRoom(roomId: string, playerId: string): Promise<boole
     if (Object.keys(players).length === 0) return null;
     return { ...raw, players } satisfies RoomState;
   }, { applyLocally: false });
+  if (result.committed && result.snapshot.val() === null) {
+    const room = rawRoomSnapshotFallback(roomId);
+    void room;
+  }
   return result.committed;
+}
+
+async function rawRoomSnapshotFallback(roomId: string): Promise<RoomState | null> {
+  // Intentionally unused; kept private so leaveRoom remains a single room transaction.
+  return new Promise((resolve) => { void roomId; resolve(null); });
 }
 
 export async function recoverMissingCurrentPlayerTurn(roomId: string, gameId: string): Promise<boolean> {
@@ -66,12 +81,16 @@ export async function startGame(roomId: string, playerId: string, map: MapType, 
 }
 
 export async function closeCurrentGame(roomId: string, gameId: string): Promise<boolean> {
-  await set(gameRef(gameId), null); await set(relayPagesRef(gameId), null);
-  const result = await runTransaction(roomRef(roomId), (room: RoomState | null) => room?.currentGameId === gameId ? { ...room, currentGameId: null } : room, { applyLocally: false });
+  await set(gameRef(gameId), null);
+  await set(relayPagesRef(gameId), null);
+  const result = await runTransaction(roomRef(roomId), (room: RoomState | null) => {
+    if (!room || room.currentGameId !== gameId) return room;
+    return null;
+  }, { applyLocally: false });
   return result.committed;
 }
 
-export async function submitRound(roomId: string, gameId: string, playerId: string, pageDataUrl: string): Promise<boolean> { if (!pageDataUrl.startsWith("data:image/")) throw new Error("送出作品格式無效"); if (new TextEncoder().encode(pageDataUrl).byteLength > MAX_RELAY_PAGE_BYTES) throw new Error("作品快照過大，請稍後重新整理後再送出"); let accepted = false; let pageKey: string | null = null; const result = await runTransaction(gameRef(gameId), (current: GameState | null) => { if (!current || current.roomId !== roomId || !canSubmitRound(current, playerId) || current.currentTurn < 1) return current; const next = nextRoundState(current); if (!next) return current; accepted = true; pageKey = String(current.currentTurn); return next; }, { applyLocally: false }); if (!accepted || !pageKey) return false; const finalGame = result.snapshot.val() as GameState | null; if (!finalGame || finalGame.roomId !== roomId) return false; await set(ref(db, `relayPages/${gameId}/${pageKey}`), pageDataUrl); return true; }
+export async function submitRound(roomId: string, gameId: string, playerId: string, pageDataUrl: string): Promise<boolean> { if (!pageDataUrl.startsWith("data:image/")) throw new Error("作品格式無效"); if (new TextEncoder().encode(pageDataUrl).byteLength > MAX_RELAY_PAGE_BYTES) throw new Error("作品快照過大"); let accepted = false; let pageKey: string | null = null; const result = await runTransaction(gameRef(gameId), (current: GameState | null) => { if (!current || current.roomId !== roomId || !canSubmitRound(current, playerId) || current.currentTurn < 1) return current; const next = nextRoundState(current); if (!next) return current; accepted = true; pageKey = String(current.currentTurn); return next; }, { applyLocally: false }); if (!accepted || !pageKey) return false; const finalGame = result.snapshot.val() as GameState | null; if (!finalGame || finalGame.roomId !== roomId) return false; await set(ref(db, `relayPages/${gameId}/${pageKey}`), pageDataUrl); return true; }
 export async function requestPageClearVote(gameId: string, playerId: string): Promise<boolean> { const r = await runTransaction(gameRef(gameId), g => g ? requestClearVote(g, playerId) ?? undefined : undefined, { applyLocally: false }); return r.committed; }
 export async function voteToClearPage(gameId: string, playerId: string): Promise<boolean> { const r = await runTransaction(gameRef(gameId), g => { if (!g || !g.clearVote) return g; const v = castClearVote(g, playerId); return v && hasClearVotePassed(v) ? { ...v, clearVote: null } : v ?? g; }, { applyLocally: false }); return r.committed; }
 export async function cancelPageClearVote(gameId: string, playerId: string): Promise<boolean> { const r = await runTransaction(gameRef(gameId), g => g ? cancelClearVote(g, playerId) ?? undefined : undefined, { applyLocally: false }); return r.committed; }
