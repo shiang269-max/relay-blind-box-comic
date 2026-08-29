@@ -44,16 +44,31 @@ export async function upsertPlayer(roomId: string, player: Player): Promise<void
 
 export async function startPlayerPresence(roomId: string, playerId: string): Promise<void> { await onDisconnect(ref(db, `rooms/${roomId}/players/${playerId}`)).remove(); }
 
+/** 最後一名玩家離開時，房間與進行中的 gameId 一起解除，避免半局殘留。 */
 export async function leaveRoom(roomId: string, playerId: string): Promise<boolean> {
+  let abandonedGameId: string | null = null;
   const result = await runTransaction(roomRef(roomId), (current: RoomState | null) => {
     if (!current) return;
     const players = normalizePlayers(current.players);
     if (!players[playerId]) return;
-    const nextPlayers = { ...players }; delete nextPlayers[playerId];
-    if (Object.keys(nextPlayers).length === 0) return null;
+    const nextPlayers = { ...players };
+    delete nextPlayers[playerId];
+    if (Object.keys(nextPlayers).length === 0) {
+      abandonedGameId = typeof current.currentGameId === "string" ? current.currentGameId : null;
+      return null;
+    }
     return { ...current, players: nextPlayers, currentGameId: typeof current.currentGameId === "string" ? current.currentGameId : null, lobby: current.lobby ?? createDefaultLobbyConfig() } satisfies RoomState;
   }, { applyLocally: false });
-  if (result.committed) { const room = result.snapshot.val() as RoomState | null; if (room?.currentGameId) await recoverMissingCurrentPlayerTurn(roomId, room.currentGameId); }
+
+  if (result.committed && abandonedGameId) {
+    // 遊戲節點與頁面採非同步清理；房間已先刪除，因此不會再被新局引用。
+    await set(gameRef(abandonedGameId), null);
+    await set(relayPagesRef(abandonedGameId), null);
+  }
+  if (result.committed) {
+    const room = result.snapshot.val() as RoomState | null;
+    if (room?.currentGameId) await recoverMissingCurrentPlayerTurn(roomId, room.currentGameId);
+  }
   return result.committed;
 }
 
@@ -100,11 +115,9 @@ export async function closeCurrentGame(roomId: string, gameId: string): Promise<
   return result.committed;
 }
 
-/** 對單一 game 節點原子推進回合；交易 updater 絕不回傳 undefined，避免 RTDB 直接拋出 Data returned undefined。 */
 export async function submitRound(roomId: string, gameId: string, playerId: string, pageDataUrl: string): Promise<boolean> {
   if (!pageDataUrl.startsWith("data:image/")) throw new Error("送出作品格式無效");
   if (new TextEncoder().encode(pageDataUrl).byteLength > MAX_RELAY_PAGE_BYTES) throw new Error("作品快照過大，請稍後重新整理後再送出");
-
   let accepted = false;
   let pageKey: string | null = null;
   const result = await runTransaction(gameRef(gameId), (current: GameState | null) => {
@@ -116,17 +129,11 @@ export async function submitRound(roomId: string, gameId: string, playerId: stri
     pageKey = String(current.currentTurn);
     return nextGame;
   }, { applyLocally: false });
-
   if (!accepted || !pageKey) return false;
   const finalGame = result.snapshot.val() as GameState | null;
   if (!finalGame || finalGame.roomId !== roomId) return false;
-
-  try {
-    await set(ref(db, `relayPages/${gameId}/${pageKey}`), pageDataUrl);
-    return true;
-  } catch (error) {
-    throw new Error(error instanceof Error ? `作品已推進但頁面保存失敗：${error.message}` : "作品已推進但頁面保存失敗");
-  }
+  try { await set(ref(db, `relayPages/${gameId}/${pageKey}`), pageDataUrl); return true; }
+  catch (error) { throw new Error(error instanceof Error ? `作品已推進但頁面保存失敗：${error.message}` : "作品已推進但頁面保存失敗"); }
 }
 
 export async function requestPageClearVote(gameId: string, playerId: string): Promise<boolean> {
