@@ -7,75 +7,40 @@ const DISCONNECT_GRACE_MS = 10_000;
 const ROOM_LOAD_TIMEOUT_MS = 8_000;
 const PLAYER_HEARTBEAT_MS = 10_000;
 
-export interface RoomSession { roomId: string; playerId: string; playerName: string; createIfMissing: boolean; }
+export interface RoomSession { roomId: string; playerId: string; playerName: string; createIfMissing: boolean; enabled?: boolean; }
 function toFirebaseErrorMessage(error: unknown): string { if (error instanceof Error) { if (error.message.includes("permission_denied")) return "Firebase 權限被拒絕，請檢查 Realtime Database Rules。"; return `Firebase 連線失敗：${error.message}`; } return "Firebase 連線失敗。"; }
 
 export function useRoom(session: RoomSession) {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(session.enabled));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     let unsubscribe: (() => void) | undefined;
     let timeoutId: number | undefined;
+    if (!session.enabled) { setLoading(false); setError(null); setRoom(null); setGame(null); return; }
     setLoading(true); setError(null); setRoom(null); setGame(null);
-
-    const fail = (nextError: unknown) => {
-      if (!active) return;
-      if (timeoutId) window.clearTimeout(timeoutId);
-      setLoading(false);
-      setError(toFirebaseErrorMessage(nextError));
-    };
-
+    const fail = (nextError: unknown) => { if (!active) return; if (timeoutId) window.clearTimeout(timeoutId); setLoading(false); setError(toFirebaseErrorMessage(nextError)); };
     const connect = async () => {
       try {
         if (!session.playerName) throw new Error("玩家名稱無效");
         const now = Date.now();
-        const player: Player = { id: session.playerId, name: session.playerName, joinedAt: now, activeAt: now };
-
-        // Reconcile first. The room watcher must never decide whether the session is ready.
-        await upsertPlayer(session.roomId, player);
+        await upsertPlayer(session.roomId, { id: session.playerId, name: session.playerName, joinedAt: now, activeAt: now });
         await startPlayerPresence(session.roomId, session.playerId);
         if (!active) return;
-
         timeoutId = window.setTimeout(() => fail(new Error("timeout")), ROOM_LOAD_TIMEOUT_MS);
-        unsubscribe = watchRoom(session.roomId, (nextRoom) => {
-          if (!active) return;
-          if (timeoutId) window.clearTimeout(timeoutId);
-          setRoom(nextRoom);
-          setError(null);
-          setLoading(false);
-        }, fail);
+        unsubscribe = watchRoom(session.roomId, (nextRoom) => { if (!active) return; if (timeoutId) window.clearTimeout(timeoutId); setRoom(nextRoom); setError(null); setLoading(false); }, fail);
       } catch (nextError) { fail(nextError); }
     };
-
     void connect();
     return () => { active = false; if (timeoutId) window.clearTimeout(timeoutId); unsubscribe?.(); };
-  }, [session.playerId, session.playerName, session.roomId]);
+  }, [session.enabled, session.playerId, session.playerName, session.roomId]);
 
-  useEffect(() => {
-    const gameId = room?.currentGameId;
-    if (!gameId) { setGame(null); return; }
-    setGame(null);
-    return watchGame(gameId, setGame, (nextError) => setError(toFirebaseErrorMessage(nextError)));
-  }, [room?.currentGameId]);
-
-  useEffect(() => {
-    if (loading || error || !room) return;
-    const heartbeatId = window.setInterval(() => { void touchPlayer(session.roomId, session.playerId).catch(() => {}); }, PLAYER_HEARTBEAT_MS);
-    return () => window.clearInterval(heartbeatId);
-  }, [error, loading, room, session.playerId, session.roomId]);
-
-  useEffect(() => {
-    if (!room || !game || game.phase !== "playing") return;
-    const currentPlayerId = game.currentPlayerId;
-    const currentPlayerExists = Boolean(currentPlayerId && room.players?.[currentPlayerId]);
-    if (currentPlayerExists) return;
-    const timeoutId = window.setTimeout(() => { if (room.currentGameId !== game.gameId) return; void recoverMissingCurrentPlayerTurn(session.roomId, game.gameId); }, DISCONNECT_GRACE_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [game?.gameId, game?.currentPlayerId, game?.phase, room?.currentGameId, room?.players, session.roomId]);
+  useEffect(() => { if (!session.enabled) { setGame(null); return; } const gameId = room?.currentGameId; if (!gameId) { setGame(null); return; } setGame(null); return watchGame(gameId, setGame, (nextError) => setError(toFirebaseErrorMessage(nextError))); }, [room?.currentGameId, session.enabled]);
+  useEffect(() => { if (!session.enabled || loading || error || !room) return; const heartbeatId = window.setInterval(() => { void touchPlayer(session.roomId, session.playerId).catch(() => {}); }, PLAYER_HEARTBEAT_MS); return () => window.clearInterval(heartbeatId); }, [error, loading, room, session.enabled, session.playerId, session.roomId]);
+  useEffect(() => { if (!session.enabled || !room || !game || game.phase !== "playing") return; const currentPlayerId = game.currentPlayerId; const currentPlayerExists = Boolean(currentPlayerId && room.players?.[currentPlayerId]); if (currentPlayerExists) return; const timeoutId = window.setTimeout(() => { if (room.currentGameId !== game.gameId) return; void recoverMissingCurrentPlayerTurn(session.roomId, game.gameId); }, DISCONNECT_GRACE_MS); return () => window.clearTimeout(timeoutId); }, [game?.gameId, game?.currentPlayerId, game?.phase, room?.currentGameId, room?.players, session.enabled, session.roomId]);
 
   const players = useMemo(() => getOrderedPlayers(room), [room]);
   const isHost = useMemo(() => isRoomHost(room, session.playerId), [room, session.playerId]);
