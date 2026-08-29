@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ref, set } from "firebase/database";
+import { ref, runTransaction, set } from "firebase/database";
 import { db } from "../lib/firebase";
 import {
   generateComicId,
@@ -56,16 +56,40 @@ export default function GameRouter({
   const saveComic = useCallback(async (title: string) => {
     if (modeId !== "relay-30") return;
 
-    const comicId = game.savedComicId ?? generateComicId();
+    const gameSnapshot = await runTransaction(
+      ref(db, `games/${game.gameId}`),
+      (current: GameState | null) => {
+        if (!current) return;
 
-    await set(ref(db, `comics/${comicId}`), {
+        if (current.savedComicId) {
+          return current;
+        }
+
+        return {
+          ...current,
+          savedComicId: generateComicId(),
+        } satisfies GameState;
+      },
+      { applyLocally: false }
+    );
+
+    const savedGame = gameSnapshot.snapshot.val() as GameState | null;
+    const comicId = savedGame?.savedComicId;
+
+    if (!comicId) {
+      throw new Error("無法建立漫畫封存識別");
+    }
+
+    const nextComic: Comic = {
       id: comicId,
       title: title.trim() || "未命名漫畫",
       createdAt: game.createdAt,
       map: game.map,
       pages,
-    });
-  }, [game.createdAt, game.map, game.savedComicId, modeId, pages]);
+    };
+
+    await set(ref(db, `comics/${comicId}`), nextComic);
+  }, [game.createdAt, game.gameId, game.map, modeId, pages]);
 
   if (game.phase === "playing") {
     const flow = getGameFlow(modeId);
