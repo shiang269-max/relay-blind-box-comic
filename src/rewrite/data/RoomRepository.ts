@@ -27,15 +27,25 @@ export async function upsertPlayer(roomId: string, player: Player): Promise<void
     const current = root.rooms?.[roomId] ?? null;
     const now = Date.now();
     if (!current) return { ...root, rooms: { ...(root.rooms ?? {}), [roomId]: { players: { [player.id]: { ...player, activeAt: now } }, currentGameId: null, lobby: createDefaultLobbyConfig(), createdAt: now } } } satisfies DatabaseRoot;
-    const players = activePlayers(normalizePlayers(current.players), now);
+
+    const originalPlayers = normalizePlayers(current.players);
+    const active = activePlayers(originalPlayers, now);
     const currentGameId = typeof current.currentGameId === "string" ? current.currentGameId : null;
     const lobby = current.lobby ?? createDefaultLobbyConfig();
-    if (currentGameId && Object.keys(players).length === 0) {
+    const existingSelf = originalPlayers[player.id];
+    const otherActivePlayers = Object.entries(active).filter(([id]) => id !== player.id);
+    const onlyPreviousSelfWasInRoom = Boolean(currentGameId && existingSelf && otherActivePlayers.length === 0);
+    const noActivePlayers = currentGameId && Object.keys(active).length === 0;
+
+    // A room with an unfinished game must never resurrect a solo session after reload/restart.
+    // If the only recorded player is the same player rejoining, the old game is abandoned.
+    if (currentGameId && (noActivePlayers || onlyPreviousSelfWasInRoom)) {
       const cleaned = cleanupGameRoot(root, currentGameId);
-      return { ...cleaned, rooms: { ...(cleaned.rooms ?? {}), [roomId]: { ...current, players: { [player.id]: { ...player, activeAt: now } }, currentGameId: null, lobby } } } satisfies DatabaseRoot;
+      return { ...cleaned, rooms: { ...(cleaned.rooms ?? {}), [roomId]: { ...current, players: { [player.id]: { ...player, activeAt: now } }, currentGameId: null, lobby, createdAt: current.createdAt ?? now } } } satisfies DatabaseRoot;
     }
-    const existing = players[player.id];
-    return { ...root, rooms: { ...(root.rooms ?? {}), [roomId]: { ...current, players: { ...players, [player.id]: { ...existing, ...player, joinedAt: existing?.joinedAt ?? player.joinedAt, activeAt: now } }, currentGameId, lobby, createdAt: current.createdAt ?? now } } } satisfies DatabaseRoot;
+
+    const existing = active[player.id];
+    return { ...root, rooms: { ...(root.rooms ?? {}), [roomId]: { ...current, players: { ...active, [player.id]: { ...existing, ...player, joinedAt: existing?.joinedAt ?? player.joinedAt, activeAt: now } }, currentGameId, lobby, createdAt: current.createdAt ?? now } } } satisfies DatabaseRoot;
   }, { applyLocally: false });
 }
 
