@@ -52,7 +52,6 @@ export function useRoom(session: RoomSession) {
   const isHost = useMemo(() => isRoomHost(room, session.playerId), [room, session.playerId]);
   const start = useCallback(async (map: MapType) => { await startGame(session.roomId, session.playerId, map); }, [session.playerId, session.roomId]);
   const submit = useCallback(async (pageDataUrl: string): Promise<boolean> => { const gameId = game?.gameId; if (!gameId) return false; return submitRound(session.roomId, gameId, session.playerId, pageDataUrl); }, [game?.gameId, session.playerId, session.roomId]);
-  const restart = useCallback(async (): Promise<boolean> => { const gameId = game?.gameId; if (!gameId) return false; return closeCurrentGame(session.roomId, gameId); }, [game?.gameId, session.roomId]);
   const leave = useCallback(async () => { await leaveRoom(session.roomId, session.playerId); }, [session.playerId, session.roomId]);
-  return { room, game, loading, error, players, isHost, start, submit, restart, leave };
+  return { room, game, loading, error, players, isHost, start, submit, leave };
 }
