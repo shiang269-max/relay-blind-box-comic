@@ -21,6 +21,7 @@ function readPlayerId(): string {
 function readPlayerName(): string { return localStorage.getItem(PLAYER_NAME_KEY) ?? ""; }
 
 function AppRewrite() {
+  // Every fresh URL load starts at the lobby. A room is never auto-joined from a hash.
   const [roomTarget, setRoomTarget] = useState<RoomTarget>(() => ({ id: generateRoomId(), createIfMissing: true }));
   const [connected, setConnected] = useState(false);
   const { id: roomId, createIfMissing } = roomTarget;
@@ -29,7 +30,7 @@ function AppRewrite() {
   const [screen, setScreen] = useState<"game" | "lobby" | "history">("lobby");
   const [viewingComic, setViewingComic] = useState<Comic | null>(null);
   const [viewportHeight, setViewportHeight] = useState(getSafeViewportHeight);
-  const { room, game, players, isHost, loading, error, start, submit, restart, leave } = useRoom({ roomId, playerId, playerName, createIfMissing, enabled: connected });
+  const { room, game, players, isHost, loading, error, start, submit, leave } = useRoom({ roomId, playerId, playerName, createIfMissing, enabled: connected });
 
   useEffect(() => {
     const updateViewport = () => setViewportHeight(getSafeViewportHeight());
@@ -52,20 +53,16 @@ function AppRewrite() {
   const joinRoom = useCallback((nextRoom: string) => {
     const normalized = nextRoom.trim().toUpperCase();
     if (!normalized) return;
-    setConnected(false);
     setRoomTarget({ id: normalized, createIfMissing: false });
     setScreen("lobby");
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${normalized}`);
-    window.setTimeout(() => setConnected(true), 0);
+    setConnected(true);
   }, []);
 
   const createNewRoom = useCallback(() => {
     const next = generateRoomId();
-    setConnected(false);
     setRoomTarget({ id: next, createIfMissing: true });
     setScreen("lobby");
-    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${next}`);
-    window.setTimeout(() => setConnected(true), 0);
+    setConnected(true);
   }, []);
 
   const returnToHome = useCallback(() => {
@@ -75,10 +72,18 @@ function AppRewrite() {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
   }, []);
 
-  const handleLeaveGame = useCallback(async () => {
+  const handleLeaveGame = useCallback(() => {
+    // Return immediately; Firebase cleanup is handled asynchronously.
     returnToHome();
     void leave().catch(() => {});
   }, [leave, returnToHome]);
+
+  useEffect(() => {
+    // Ensure a copied/old URL hash can never auto-resume a previous room on reload.
+    if (window.location.hash) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  }, []);
 
   if (viewingComic) return <ReviewPage comic={viewingComic} map={viewingComic.map ?? "earth"} onBack={() => setViewingComic(null)} readOnly />;
   if (screen === "history") return <HistoryPage onBack={() => setScreen("lobby")} onOpen={setViewingComic} />;
@@ -89,5 +94,4 @@ function AppRewrite() {
   if (screen === "game" && room && game && (game.phase === "playing" || game.phase === "review")) return <GameRouter room={room} game={game} players={players} submit={submit} roomId={roomId} playerId={playerId} playerName={playerName} onLeaveGame={handleLeaveGame} />;
   return <LobbyPage roomId={roomId} playerName={playerName} players={players} isHost={isHost} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
 }
-
 export default AppRewrite;
