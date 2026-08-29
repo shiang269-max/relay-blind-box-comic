@@ -21,7 +21,6 @@ function readPlayerId(): string {
 function readPlayerName(): string { return localStorage.getItem(PLAYER_NAME_KEY) ?? ""; }
 
 function AppRewrite() {
-  // Every fresh URL load starts at the lobby. A room is never auto-joined from a hash.
   const [roomTarget, setRoomTarget] = useState<RoomTarget>(() => ({ id: generateRoomId(), createIfMissing: true }));
   const [connected, setConnected] = useState(false);
   const { id: roomId, createIfMissing } = roomTarget;
@@ -53,7 +52,7 @@ function AppRewrite() {
   const joinRoom = useCallback((nextRoom: string) => {
     const normalized = nextRoom.trim().toUpperCase();
     if (!normalized) return;
-    setRoomTarget({ id: normalized, createIfMissing: false });
+    setRoomTarget({ id: normalized, createIfMissing: true });
     setScreen("lobby");
     setConnected(true);
   }, []);
@@ -73,25 +72,21 @@ function AppRewrite() {
   }, []);
 
   const handleLeaveGame = useCallback(() => {
-    // Return immediately; Firebase cleanup is handled asynchronously.
     returnToHome();
     void leave().catch(() => {});
   }, [leave, returnToHome]);
 
   useEffect(() => {
-    // Ensure a copied/old URL hash can never auto-resume a previous room on reload.
-    if (window.location.hash) {
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    }
+    if (window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search);
   }, []);
 
   if (viewingComic) return <ReviewPage comic={viewingComic} map={viewingComic.map ?? "earth"} onBack={() => setViewingComic(null)} readOnly />;
   if (screen === "history") return <HistoryPage onBack={() => setScreen("lobby")} onOpen={setViewingComic} />;
-  if (!connected) return <LobbyPage roomId={roomId} playerName={playerName} players={[]} isHost={false} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
+  if (!connected) return <LobbyPage roomId={roomId} playerName={playerName} players={[]} isHost={true} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
   if (loading) return <div style={{ minHeight: Math.max(viewportHeight, 320), width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", background: "#020617", color: "#ffffff", fontSize: 18 }}>正在連線至遊戲房間…</div>;
   if (error) return <div style={{ minHeight: Math.max(viewportHeight, 320), width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "#020617", color: "#ffffff", fontSize: 16, textAlign: "center" }}>{error}</div>;
-  if (!room && !createIfMissing) return <LobbyPage roomId={roomId} playerName={playerName} players={[]} isHost={false} roomMissing onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
-  if (screen === "game" && room && game && (game.phase === "playing" || game.phase === "review")) return <GameRouter room={room} game={game} players={players} submit={submit} roomId={roomId} playerId={playerId} playerName={playerName} onLeaveGame={handleLeaveGame} />;
-  return <LobbyPage roomId={roomId} playerName={playerName} players={players} isHost={isHost} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
+  if (!room) return <LobbyPage roomId={roomId} playerName={playerName} players={[]} isHost={true} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
+  if (screen === "game" && game && (game.phase === "playing" || game.phase === "review")) return <GameRouter room={room} game={game} players={players} submit={submit} roomId={roomId} playerId={playerId} playerName={playerName} onLeaveGame={handleLeaveGame} />;
+  return <LobbyPage roomId={roomId} playerName={playerName} players={players} isHost={isHost || createIfMissing} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
 }
 export default AppRewrite;
