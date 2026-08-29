@@ -15,12 +15,8 @@ interface GameRouterProps { room: RoomState; game: GameState; players: Player[];
 export default function GameRouter({ game, players, submit, roomId, playerId, playerName, onLeaveGame }: GameRouterProps) {
   const [relayPages, setRelayPages] = useState<Record<string, string>>({});
   const [relayPagesLoaded, setRelayPagesLoaded] = useState(false);
-
   useEffect(() => { setRelayPages({}); setRelayPagesLoaded(false); return watchRelayPages(game.gameId, (nextPages) => { setRelayPages(nextPages); setRelayPagesLoaded(true); }); }, [game.gameId]);
-
-  const pages = relayPages;
-  const modeId = game.mode;
-  const mode = getGameMode(modeId);
+  const pages = relayPages; const modeId = game.mode; const mode = getGameMode(modeId);
 
   const saveComic = useCallback(async (title: string) => {
     if (modeId !== "relay-30") return;
@@ -35,8 +31,8 @@ export default function GameRouter({ game, players, submit, roomId, playerId, pl
     await set(ref(db, `comics/${comicId}`), { id: comicId, title: title.trim() || "未命名漫畫", createdAt: game.completedAt ?? game.createdAt, map: game.map, pages } satisfies Comic);
   }, [game.completedAt, game.createdAt, game.gameId, game.map, modeId, pages, roomId]);
 
-  const finishGame = useCallback(async () => { await closeCurrentGame(roomId, game.gameId); onLeaveGame(); }, [game.gameId, onLeaveGame, roomId]);
-  const leaveGame = useCallback(async () => { await leaveRoom(roomId, playerId); onLeaveGame(); }, [onLeaveGame, playerId, roomId]);
+  const finishGame = useCallback(async () => { onLeaveGame(); void closeCurrentGame(roomId, game.gameId); }, [game.gameId, onLeaveGame, roomId]);
+  const leaveGame = useCallback(async () => { onLeaveGame(); void leaveRoom(roomId, playerId); }, [onLeaveGame, playerId, roomId]);
 
   if (game.phase === "playing") {
     const flow = getGameFlow(modeId);
@@ -56,6 +52,5 @@ export default function GameRouter({ game, players, submit, roomId, playerId, pl
     const comic: Comic = { id: game.savedComicId ?? game.gameId, title: "本局成果", createdAt: game.completedAt ?? game.createdAt, map: game.map, pages };
     return <ReviewPage comic={comic} map={game.map} totalPages={mode.totalRounds ?? 30} onBack={finishGame} onSave={saveComic} />;
   }
-
   return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="等待遊戲狀態" map={game.map} />;
 }
