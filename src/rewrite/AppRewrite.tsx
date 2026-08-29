@@ -27,7 +27,6 @@ function AppRewrite() {
   const connectedRef = useRef(connected);
   useEffect(() => { leaveRef.current = leave; }, [leave]);
   useEffect(() => { connectedRef.current = connected; }, [connected]);
-
   useEffect(() => { const updateViewport = () => setViewportHeight(getSafeViewportHeight()); updateViewport(); window.addEventListener("resize", updateViewport); window.visualViewport?.addEventListener("resize", updateViewport); return () => { window.removeEventListener("resize", updateViewport); window.visualViewport?.removeEventListener("resize", updateViewport); }; }, []);
   useEffect(() => () => { if (connectedRef.current) void leaveRef.current().catch(() => {}); }, []);
   useEffect(() => { if (window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search); }, []);
@@ -35,14 +34,8 @@ function AppRewrite() {
   const saveName = useCallback(async (name: string) => { const next = name.trim().slice(0, 12); if (!next) return; localStorage.setItem(PLAYER_NAME_KEY, next); setPlayerName(next); setConnected(true); }, []);
   const joinRoom = useCallback((nextRoom: string) => { const normalized = nextRoom.trim().toUpperCase(); if (!normalized) return; setRoomTarget({ id: normalized, createIfMissing: true }); setScreen("lobby"); setConnected(true); }, []);
   const createNewRoom = useCallback(() => { setRoomTarget({ id: generateRoomId(), createIfMissing: true }); setScreen("lobby"); setConnected(true); }, []);
-  const returnToHome = useCallback(() => { setConnected(false); setScreen("lobby"); setRoomTarget({ id: generateRoomId(), createIfMissing: true }); window.history.replaceState(null, "", window.location.pathname + window.location.search); }, []);
-  const handleLeaveGame = useCallback(async () => {
-    await leave();
-    setRoomTarget({ id: generateRoomId(), createIfMissing: true });
-    setScreen("lobby");
-    setConnected(true);
-    window.history.replaceState(null, "", window.location.pathname + window.location.search);
-  }, [leave]);
+  const returnToHome = useCallback(() => { setScreen("lobby"); setRoomTarget({ id: generateRoomId(), createIfMissing: true }); setConnected(true); window.history.replaceState(null, "", window.location.pathname + window.location.search); }, []);
+  const handleLeaveGame = useCallback(async () => { await leave(); returnToHome(); }, [leave, returnToHome]);
 
   if (viewingComic) return <ReviewPage comic={viewingComic} map={viewingComic.map ?? "earth"} onBack={() => setViewingComic(null)} readOnly />;
   if (screen === "history") return <HistoryPage onBack={() => setScreen("lobby")} onOpen={setViewingComic} />;
