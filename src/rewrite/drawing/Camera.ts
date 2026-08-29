@@ -22,8 +22,7 @@ export class Camera {
 
   constructor(
     private readonly world: Size,
-    private readonly maxZoom = 8,
-    private readonly preferredZoom = 1
+    private readonly maxZoom = 8
   ) {}
 
   get x(): number { return this.position.x; }
