@@ -182,32 +182,56 @@ export async function closeCurrentGame(roomId: string, gameId: string): Promise<
   return result.committed;
 }
 
+/**
+ * 送出頁面與推進回合必須是同一個 Firebase transaction。
+ * 避免先寫入頁面、後推進回合失敗而留下無法覆寫的孤立資料。
+ */
 export async function submitRound(roomId: string, gameId: string, playerId: string, pageDataUrl: string): Promise<boolean> {
   if (!pageDataUrl.startsWith("data:image/")) throw new Error("送出作品格式無效");
   if (new TextEncoder().encode(pageDataUrl).byteLength > MAX_RELAY_PAGE_BYTES) {
     throw new Error("作品快照過大，請稍後重新整理後再送出");
   }
 
-  const gameSnapshot = await get(gameRef(gameId));
-  const game = gameSnapshot.val() as GameState | null;
-  if (!game || game.roomId !== roomId || !canSubmitRound(game, playerId)) return false;
+  const result = await runTransaction(ref(db), (root: unknown) => {
+    const currentRoot = (root ?? {}) as {
+      rooms?: Record<string, RoomState | undefined>;
+      games?: Record<string, GameState | undefined>;
+      relayPages?: Record<string, Record<string, string> | undefined>;
+    };
 
-  const turnSnapshot = game.currentTurn;
-  if (turnSnapshot < 1) return false;
+    const room = currentRoot.rooms?.[roomId] ?? null;
+    const game = currentRoot.games?.[gameId] ?? null;
 
-  const pageResult = await runTransaction(
-    ref(db, `relayPages/${gameId}/${turnSnapshot}`),
-    (current: string | null) => current ?? pageDataUrl,
-    { applyLocally: false }
-  );
+    if (!room || room.currentGameId !== gameId) return;
+    if (!game || game.roomId !== roomId) return;
+    if (!canSubmitRound(game, playerId)) return;
 
-  if (!pageResult.committed) return false;
+    const turnSnapshot = game.currentTurn;
+    if (turnSnapshot < 1) return;
 
-  const result = await runTransaction(gameRef(gameId), (current: GameState | null) => {
-    if (!current || current.roomId !== roomId) return;
-    if (!canSubmitRound(current, playerId)) return;
-    if (current.currentTurn !== turnSnapshot) return;
-    return nextRoundState(current) ?? undefined;
+    const gamePages = currentRoot.relayPages?.[gameId] ?? {};
+    const pageKey = String(turnSnapshot);
+
+    // 同一回合一旦已有正式頁面，不允許第二次覆寫。
+    if (gamePages[pageKey]) return;
+
+    const nextGame = nextRoundState(game);
+    if (!nextGame) return;
+
+    return {
+      ...currentRoot,
+      games: {
+        ...(currentRoot.games ?? {}),
+        [gameId]: nextGame,
+      },
+      relayPages: {
+        ...(currentRoot.relayPages ?? {}),
+        [gameId]: {
+          ...gamePages,
+          [pageKey]: pageDataUrl,
+        },
+      },
+    };
   }, { applyLocally: false });
 
   return result.committed;
