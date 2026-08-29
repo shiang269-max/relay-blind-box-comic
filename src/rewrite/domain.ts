@@ -14,7 +14,7 @@ export const TOTAL_ROUNDS = 30;
 export type MapType = "earth" | "space";
 export type TimeOfDay = "day" | "dusk" | "night";
 
-export interface Player { id: string; name: string; joinedAt: number; }
+export interface Player { id: string; name: string; joinedAt: number; activeAt?: number; }
 export interface LobbyConfig { selectedMode: GameModeId; selectedMap: MapType; }
 export interface RoomState { players: Record<string, Player>; currentGameId: string | null; lobby: LobbyConfig; createdAt: number; }
 export interface Comic { id: string; title: string; createdAt: number; pages: Record<string, string>; map?: MapType; }
