@@ -19,17 +19,11 @@ export function watchRelayPages(gameId: string, callback: (pages: Record<string,
 export async function upsertPlayer(roomId: string, player: Player): Promise<void> {
   await runTransaction(roomRef(roomId), (current: RoomState | null) => {
     const players = normalizePlayers(current?.players);
-    if (!current || Object.keys(players).length === 0) {
-      return { players: { [player.id]: player }, currentGameId: null, lobby: createDefaultLobbyConfig(), createdAt: Date.now() } satisfies RoomState;
-    }
+    if (!current || Object.keys(players).length === 0) return { players: { [player.id]: player }, currentGameId: null, lobby: createDefaultLobbyConfig(), createdAt: Date.now() } satisfies RoomState;
     const currentGameId = typeof current.currentGameId === "string" ? current.currentGameId : null;
     const lobby = current.lobby ?? createDefaultLobbyConfig();
     const existing = players[player.id];
-    // A lone copy of the same local player is stale state from a previous session.
-    // This game does not resume sessions, so reset the room instead of reopening old work.
-    if (currentGameId !== null && existing && Object.keys(players).length === 1) {
-      return { players: { [player.id]: { ...player, joinedAt: Date.now(), activeAt: Date.now() } }, currentGameId: null, lobby: createDefaultLobbyConfig(), createdAt: Date.now() } satisfies RoomState;
-    }
+    if (currentGameId !== null && existing && Object.keys(players).length === 1) return { players: { [player.id]: { ...player, joinedAt: Date.now(), activeAt: Date.now() } }, currentGameId: null, lobby: createDefaultLobbyConfig(), createdAt: Date.now() } satisfies RoomState;
     if (currentGameId !== null) {
       if (existing) return { ...current, players: { ...players, [player.id]: { ...existing, name: player.name, activeAt: Date.now() } }, currentGameId, lobby } satisfies RoomState;
       return { ...current, players, currentGameId, lobby } satisfies RoomState;
@@ -56,8 +50,10 @@ export async function startGame(roomId: string, playerId: string, map: MapType, 
   const roomResult = await runTransaction(roomRef(roomId), (rawRoom: RoomState | null) => {
     if (!rawRoom) return rawRoom;
     const room: RoomState = { ...rawRoom, players: normalizePlayers(rawRoom.players), currentGameId: typeof rawRoom.currentGameId === "string" ? rawRoom.currentGameId : null, lobby: rawRoom.lobby ?? createDefaultLobbyConfig(), createdAt: rawRoom.createdAt ?? createdAt };
-    if (!canStartGame(room, playerId)) return room;
-    const participantIds = orderPlayers(room.players).map(item => item.id); if (!participantIds.length) return room;
+    const participantIds = orderPlayers(room.players).map(item => item.id);
+    const isSoloRestart = participantIds.length === 1 && participantIds[0] === playerId;
+    if (!isSoloRestart && !canStartGame(room, playerId)) return room;
+    if (!participantIds.length) return room;
     game = createGameState({ gameId, roomId, mode, map, participantIds, currentPlayerId: participantIds[0] ?? null, createdAt, modeState: mode === "relay-30" ? createRelayModeState() : {} });
     return { ...room, currentGameId: gameId, lobby: { selectedMode: mode, selectedMap: map } } satisfies RoomState;
   }, { applyLocally: false });
