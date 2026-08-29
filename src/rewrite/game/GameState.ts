@@ -7,6 +7,7 @@ export interface ClearVoteState {
   requestedBy: string;
   requestedAt: number;
   votes: Record<string, true>;
+  pageIndex: number;
 }
 
 export interface GameState {
@@ -36,9 +37,7 @@ export interface CreateGameStateInput {
   modeState?: unknown;
 }
 
-export function createGameState(
-  input: CreateGameStateInput
-): GameState {
+export function createGameState(input: CreateGameStateInput): GameState {
   return {
     gameId: input.gameId,
     roomId: input.roomId,
