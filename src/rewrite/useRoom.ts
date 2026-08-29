@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type {
-  MapType,
-  Player,
-  RoomState,
-} from "./domain";
+import type { MapType, Player, RoomState } from "./domain";
 import type { GameState } from "./game/GameState";
 import {
+  closeCurrentGame,
   getOrderedPlayers,
   isRoomHost,
   leaveRoom,
@@ -35,7 +32,6 @@ export function useRoom(session: RoomSession) {
   useEffect(() => {
     setLoading(true);
     setGame(null);
-
     return watchRoom(session.roomId, (nextRoom) => {
       setRoom(nextRoom);
       setLoading(false);
@@ -44,17 +40,12 @@ export function useRoom(session: RoomSession) {
 
   useEffect(() => {
     const gameId = room?.currentGameId;
-
     if (!gameId) {
       setGame(null);
       return;
     }
-
     setGame(null);
-
-    return watchGame(gameId, (nextGame) => {
-      setGame(nextGame);
-    });
+    return watchGame(gameId, setGame);
   }, [room?.currentGameId]);
 
   useEffect(() => {
@@ -66,97 +57,46 @@ export function useRoom(session: RoomSession) {
       name: session.playerName,
       joinedAt: Date.now(),
     };
-
     void upsertPlayer(session.roomId, player);
     void startPlayerPresence(session.roomId, session.playerId);
-  }, [
-    loading,
-    room,
-    session.createIfMissing,
-    session.playerId,
-    session.playerName,
-    session.roomId,
-  ]);
+  }, [loading, room, session.createIfMissing, session.playerId, session.playerName, session.roomId]);
 
   useEffect(() => {
-    if (!room || !game) return;
-    if (game.phase !== "playing") return;
-
-    const currentPlayerId = game.currentPlayerId;
+    if (!room || !game || game.phase !== "playing") return;
     const currentPlayerExists = Boolean(
-      currentPlayerId && room.players[currentPlayerId]
+      game.currentPlayerId && room.players[game.currentPlayerId]
     );
-
     if (currentPlayerExists) return;
 
     const timeoutId = window.setTimeout(() => {
       if (room.currentGameId !== game.gameId) return;
-      void recoverMissingCurrentPlayerTurn(
-        session.roomId,
-        game.gameId
-      );
+      void recoverMissingCurrentPlayerTurn(session.roomId, game.gameId);
     }, DISCONNECT_GRACE_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [game?.gameId, game?.currentPlayerId, game?.phase, room?.currentGameId, room?.players, session.roomId]);
 
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [
-    game?.gameId,
-    game?.currentPlayerId,
-    game?.phase,
-    room?.currentGameId,
-    room?.players,
-    session.roomId,
-  ]);
+  const players = useMemo(() => getOrderedPlayers(room), [room]);
+  const isHost = useMemo(() => isRoomHost(room, session.playerId), [room, session.playerId]);
 
-  const players = useMemo(
-    () => getOrderedPlayers(room),
-    [room]
-  );
+  const start = useCallback(async (map: MapType) => {
+    await startGame(session.roomId, session.playerId, map);
+  }, [session.playerId, session.roomId]);
 
-  const isHost = useMemo(
-    () => isRoomHost(room, session.playerId),
-    [room, session.playerId]
-  );
+  const submit = useCallback(async (pageDataUrl: string): Promise<boolean> => {
+    const gameId = game?.gameId;
+    if (!gameId) return false;
+    return submitRound(session.roomId, gameId, session.playerId, pageDataUrl);
+  }, [game?.gameId, session.playerId, session.roomId]);
 
-  const start = useCallback(
-    async (map: MapType) => {
-      await startGame(
-        session.roomId,
-        session.playerId,
-        map
-      );
-    },
-    [session.playerId, session.roomId]
-  );
-
-  const submit = useCallback(
-    async (pageDataUrl: string): Promise<boolean> => {
-      const gameId = game?.gameId;
-      if (!gameId) return false;
-
-      return submitRound(
-        session.roomId,
-        gameId,
-        session.playerId,
-        pageDataUrl
-      );
-    },
-    [game?.gameId, session.playerId, session.roomId]
-  );
+  const restart = useCallback(async (): Promise<boolean> => {
+    const gameId = game?.gameId;
+    if (!gameId) return false;
+    return closeCurrentGame(session.roomId, gameId);
+  }, [game?.gameId, session.roomId]);
 
   const leave = useCallback(async () => {
     await leaveRoom(session.roomId, session.playerId);
   }, [session.playerId, session.roomId]);
 
-  return {
-    room,
-    game,
-    loading,
-    players,
-    isHost,
-    start,
-    submit,
-    leave,
-  };
+  return { room, game, loading, players, isHost, start, submit, restart, leave };
 }
