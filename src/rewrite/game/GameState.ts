@@ -3,6 +3,12 @@ import type { GameModeId } from "./GameMode";
 
 export type GamePhase = "playing" | "review";
 
+export interface ClearVoteState {
+  requestedBy: string;
+  requestedAt: number;
+  votes: Record<string, true>;
+}
+
 export interface GameState {
   gameId: string;
   roomId: string;
@@ -15,6 +21,7 @@ export interface GameState {
   createdAt: number;
   completedAt: number | null;
   savedComicId: string | null;
+  clearVote: ClearVoteState | null;
   modeState: unknown;
 }
 
@@ -44,6 +51,7 @@ export function createGameState(
     createdAt: input.createdAt ?? Date.now(),
     completedAt: null,
     savedComicId: null,
+    clearVote: null,
     modeState: input.modeState ?? {},
   };
 }
