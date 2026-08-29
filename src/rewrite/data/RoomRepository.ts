@@ -4,7 +4,6 @@ import {
   onValue,
   ref,
   runTransaction,
-  set,
   type Unsubscribe,
 } from "firebase/database";
 import { db } from "../../lib/firebase";
@@ -80,16 +79,44 @@ export async function recoverMissingCurrentPlayerTurn(roomId: string, gameId: st
 }
 
 export async function startGame(roomId: string, playerId: string, map: MapType, mode: GameModeId = getDefaultGameMode()): Promise<string> {
-  const gameId = generateGameId(); const createdAt = Date.now(); let gameToCreate: GameState | null = null;
-  const result = await runTransaction(roomRef(roomId), (current: RoomState | null) => {
-    if (!current || !canStartGame(current, playerId)) return;
-    const participantIds = orderPlayers(current.players).map((player) => player.id); if (!participantIds.length) return;
-    gameToCreate = createGameState({ gameId, roomId, mode, map, participantIds, currentPlayerId: participantIds[0] ?? null, createdAt, modeState: mode === "relay-30" ? createRelayModeState() : {} });
-    return { ...current, currentGameId: gameId, lobby: { selectedMode: mode, selectedMap: map } } satisfies RoomState;
+  const gameId = generateGameId();
+  const createdAt = Date.now();
+  const result = await runTransaction(ref(db), (root: unknown) => {
+    const currentRoot = (root ?? {}) as {
+      rooms?: Record<string, RoomState | undefined>;
+      games?: Record<string, GameState | undefined>;
+    };
+    const room = currentRoot.rooms?.[roomId] ?? null;
+    if (!room || !canStartGame(room, playerId)) return;
+    const participantIds = orderPlayers(room.players).map((player) => player.id);
+    if (!participantIds.length) return;
+    const game = createGameState({
+      gameId,
+      roomId,
+      mode,
+      map,
+      participantIds,
+      currentPlayerId: participantIds[0] ?? null,
+      createdAt,
+      modeState: mode === "relay-30" ? createRelayModeState() : {},
+    });
+    return {
+      ...currentRoot,
+      rooms: {
+        ...(currentRoot.rooms ?? {}),
+        [roomId]: {
+          ...room,
+          currentGameId: gameId,
+          lobby: { selectedMode: mode, selectedMap: map },
+        },
+      },
+      games: {
+        ...(currentRoot.games ?? {}),
+        [gameId]: game,
+      },
+    };
   }, { applyLocally: false });
-  if (!result.committed || !gameToCreate) throw new Error("無法開始遊戲");
-  try { await set(gameRef(gameId), gameToCreate); }
-  catch (error) { await runTransaction(roomRef(roomId), (current: RoomState | null) => current?.currentGameId === gameId ? { ...current, currentGameId: null } : undefined, { applyLocally: false }); throw error; }
+  if (!result.committed) throw new Error("無法開始遊戲");
   return gameId;
 }
 
