@@ -55,17 +55,12 @@ export class Camera {
     this.clamp();
   }
 
+  /** 初始與重設使用 cover，避免桌面橫向視窗只剩中間一條可繪製區。 */
   fitToWorld(): void {
-    this._zoom = this.fitZoom();
+    this._zoom = this.coverZoom();
     this.position = {
-      x: Math.max(
-        0,
-        (this.world.width - this.viewport.width / this._zoom) / 2
-      ),
-      y: Math.max(
-        0,
-        (this.world.height - this.viewport.height / this._zoom) / 2
-      ),
+      x: (this.world.width - this.viewport.width / this._zoom) / 2,
+      y: (this.world.height - this.viewport.height / this._zoom) / 2,
     };
     this.clamp();
   }
@@ -100,13 +95,10 @@ export class Camera {
       !Number.isFinite(screen.y) ||
       !Number.isFinite(factor) ||
       factor <= 0
-    ) {
-      return;
-    }
+    ) return;
 
     const anchor = this.screenToWorld(screen);
     const nextZoom = this.clampZoom(this._zoom * factor);
-
     if (Math.abs(nextZoom - this._zoom) < 1e-9) return;
 
     this._zoom = nextZoom;
@@ -132,16 +124,18 @@ export class Camera {
   }
 
   isInsideWorld(point: Point): boolean {
-    return (
-      point.x >= 0 &&
-      point.y >= 0 &&
-      point.x <= this.world.width &&
-      point.y <= this.world.height
-    );
+    return point.x >= 0 && point.y >= 0 && point.x <= this.world.width && point.y <= this.world.height;
   }
 
   private fitZoom(): number {
     return Math.min(
+      this.viewport.width / this.world.width,
+      this.viewport.height / this.world.height
+    );
+  }
+
+  private coverZoom(): number {
+    return Math.max(
       this.viewport.width / this.world.width,
       this.viewport.height / this.world.height
     );
