@@ -54,8 +54,8 @@ function AppRewrite() {
     if (!normalized) return;
     setConnected(false);
     setRoomTarget({ id: normalized, createIfMissing: false });
-    setScreen("game");
-    window.location.hash = normalized;
+    setScreen("lobby");
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${normalized}`);
     window.setTimeout(() => setConnected(true), 0);
   }, []);
 
@@ -64,7 +64,7 @@ function AppRewrite() {
     setConnected(false);
     setRoomTarget({ id: next, createIfMissing: true });
     setScreen("lobby");
-    window.location.hash = next;
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${next}`);
     window.setTimeout(() => setConnected(true), 0);
   }, []);
 
@@ -76,35 +76,17 @@ function AppRewrite() {
   }, []);
 
   const handleLeaveGame = useCallback(async () => {
-    setConnected(false);
-    setScreen("lobby");
-    setRoomTarget({ id: generateRoomId(), createIfMissing: true });
-    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    returnToHome();
     void leave().catch(() => {});
-  }, [leave]);
-
-  const handleRestart = useCallback(async () => {
-    try { await restart(); } finally { returnToHome(); }
-  }, [restart, returnToHome]);
+  }, [leave, returnToHome]);
 
   if (viewingComic) return <ReviewPage comic={viewingComic} map={viewingComic.map ?? "earth"} onBack={() => setViewingComic(null)} readOnly />;
   if (screen === "history") return <HistoryPage onBack={() => setScreen("lobby")} onOpen={setViewingComic} />;
-
-  if (!connected) {
-    return <LobbyPage roomId={roomId} playerName={playerName} players={[]} isHost={false} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
-  }
-
+  if (!connected) return <LobbyPage roomId={roomId} playerName={playerName} players={[]} isHost={false} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
   if (loading) return <div style={{ minHeight: Math.max(viewportHeight, 320), width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", background: "#020617", color: "#ffffff", fontSize: 18 }}>正在連線至遊戲房間…</div>;
   if (error) return <div style={{ minHeight: Math.max(viewportHeight, 320), width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "#020617", color: "#ffffff", fontSize: 16, textAlign: "center" }}>{error}</div>;
-
-  if (!room && !createIfMissing) {
-    return <LobbyPage roomId={roomId} playerName={playerName} players={[]} isHost={false} roomMissing onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
-  }
-
-  if (screen === "game" && room && game && (game.phase === "playing" || game.phase === "review")) {
-    return <GameRouter room={room} game={game} players={players} submit={submit} roomId={roomId} playerId={playerId} playerName={playerName} onLeaveGame={handleLeaveGame} />;
-  }
-
+  if (!room && !createIfMissing) return <LobbyPage roomId={roomId} playerName={playerName} players={[]} isHost={false} roomMissing onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
+  if (screen === "game" && room && game && (game.phase === "playing" || game.phase === "review")) return <GameRouter room={room} game={game} players={players} submit={submit} roomId={roomId} playerId={playerId} playerName={playerName} onLeaveGame={handleLeaveGame} />;
   return <LobbyPage roomId={roomId} playerName={playerName} players={players} isHost={isHost} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
 }
 
