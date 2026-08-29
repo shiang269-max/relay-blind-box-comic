@@ -16,9 +16,8 @@ export interface Size {
  * - position：世界座標中的左上角視點
  * - zoom：每 1 世界單位對應多少 CSS 像素
  *
- * 初始視角完整顯示整個世界，並允許再縮小。
- * 世界外區域由 DrawingSurface 以同一個世界背景延伸渲染，因此不會回到舊版的
- * 黑邊／獨立畫布問題。
+ * 最低縮放是「完整世界都能收進 viewport」的倍率，
+ * 因此手機直向畫布可以從初始視角再縮小，並持續維持世界背景與畫布一致。
  */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
