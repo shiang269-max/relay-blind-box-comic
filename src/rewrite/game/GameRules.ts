@@ -1,10 +1,10 @@
 import type { Player, RoomState } from "../domain";
+import type { GameState } from "./GameState";
 import { getGameFlow } from "./getGameFlow";
 import {
   createRelayModeState,
   type RelayModeState,
 } from "./RelayModeState";
-import type { GameState } from "./GameState";
 
 export function orderPlayers(
   players: Record<string, Player> | undefined
@@ -20,73 +20,115 @@ export function getHostId(room: RoomState | null): string | null {
 }
 
 export function canStartGame(room: RoomState | null, playerId: string): boolean {
-  if (!room || room.game.phase !== "lobby") return false;
+  if (!room || room.currentGameId !== null) return false;
   return getHostId(room) === playerId;
 }
 
-export function canSubmitRound(room: RoomState | null, playerId: string): boolean {
-  if (!room || room.game.phase !== "playing") return false;
-  return room.game.currentPlayerId === playerId;
+export function canSubmitRound(
+  game: GameState | null,
+  playerId: string
+): boolean {
+  if (!game || game.phase !== "playing") return false;
+  return game.currentPlayerId === playerId;
 }
 
-export function recoverMissingCurrentPlayer(room: RoomState): RoomState | null {
-  if (room.game.phase !== "playing") return null;
+export function findNextActiveParticipant(
+  participantIds: readonly string[],
+  currentPlayerId: string | null,
+  activePlayerIds: ReadonlySet<string>
+): string | null {
+  if (participantIds.length === 0) return null;
 
-  const players = orderPlayers(room.players);
-  if (players.length === 0) return null;
+  if (currentPlayerId === null) {
+    return participantIds.find((playerId) => activePlayerIds.has(playerId)) ?? null;
+  }
 
-  const currentPlayerId = room.game.currentPlayerId;
-  if (currentPlayerId && room.players[currentPlayerId]) return null;
+  const currentIndex = participantIds.indexOf(currentPlayerId);
+
+  if (currentIndex < 0) {
+    throw new Error("currentPlayerId 不存在於 game.participantIds");
+  }
+
+  for (let offset = 1; offset <= participantIds.length; offset += 1) {
+    const playerId = participantIds[
+      (currentIndex + offset) % participantIds.length
+    ];
+
+    if (activePlayerIds.has(playerId)) {
+      return playerId;
+    }
+  }
+
+  return null;
+}
+
+export function recoverMissingCurrentPlayer(
+  game: GameState,
+  activePlayerIds: ReadonlySet<string>
+): GameState | null {
+  if (game.phase !== "playing") return null;
+
+  const currentPlayerId = game.currentPlayerId;
+
+  if (
+    currentPlayerId !== null &&
+    activePlayerIds.has(currentPlayerId)
+  ) {
+    return null;
+  }
+
+  const nextPlayerId = findNextActiveParticipant(
+    game.participantIds,
+    currentPlayerId,
+    activePlayerIds
+  );
+
+  if (nextPlayerId === currentPlayerId) return null;
 
   return {
-    ...room,
-    game: {
-      ...room.game,
-      currentPlayerId: players[0].id,
-    },
+    ...game,
+    currentPlayerId: nextPlayerId,
   };
 }
 
 /**
- * 推進遊戲流程只處理小型狀態。
- *
- * 30 頁圖片本身不能再塞進 room transaction，否則每次送出都會把所有歷史
- * 累積快照一起帶進交易，資料量會隨回合數倍增。頁面內容由 Repository 存在
- * 獨立的 relayPages 路徑，流程狀態只保存「現在輪到誰、進度到哪裡」。
+ * 正常回合推進只依固定 participantIds 決定順序。
+ * 在線狀態與缺席恢復由 recoverMissingCurrentPlayer() 處理。
  */
-export function nextRoundState(room: RoomState): RoomState | null {
-  if (room.game.phase !== "playing") return null;
+export function nextRoundState(game: GameState): GameState | null {
+  if (game.phase !== "playing") return null;
+  if (game.participantIds.length === 0) return null;
 
-  const players = orderPlayers(room.players);
-  if (players.length === 0) return null;
-
-  const mode = room.game.mode ?? "relay-30";
+  const mode = game.mode ?? "relay-30";
   const flow = getGameFlow(mode);
   const next = flow.getNextState({
-    currentRound: room.game.currentTurn,
-    currentPlayerId: room.game.currentPlayerId,
-    playerIds: players.map((player) => player.id),
+    currentRound: game.currentTurn,
+    currentPlayerId: game.currentPlayerId,
+    playerIds: game.participantIds,
   });
 
   if (mode !== "relay-30") {
     throw new Error("目前尚未實作此模式的送出規則");
   }
 
+  const enteringReview = next.phase === "review";
+
   return {
-    ...room,
-    game: {
-      ...room.game,
-      mode,
-      phase: next.phase,
-      currentTurn: next.currentRound,
-      currentPlayerId: next.currentPlayerId,
-    },
+    ...game,
+    mode,
+    phase: next.phase,
+    currentTurn: next.currentRound,
+    currentPlayerId: next.currentPlayerId,
+    completedAt:
+      enteringReview && game.completedAt === null
+        ? Date.now()
+        : game.completedAt,
   };
 }
 
 /**
- * Backward-compatible reader for rooms created before relay pages moved to
- * their dedicated Firebase path.
+ * Transitional reader retained until GameRouter and relay page storage finish
+ * moving fully to game-scoped paths.
  */
 export function asRelayModeState(game: GameState): RelayModeState {
   if (isRelayModeState(game.modeState)) return game.modeState;
