@@ -14,13 +14,13 @@ const COLORS = ["#000000", "#ffffff", "#ef4444", "#f97316", "#eab308", "#22c55e"
 type InteractionState = "idle" | "drawing" | "moving" | "pinching" | "eraser";
 
 interface DrawingScreenProps {
-  mode: GameMode; roomId: string; pageIndex: number; round: number; playerCount: number;
+  mode: GameMode; roomId: string; gameId: string; pageIndex: number; round: number; playerCount: number;
   map: MapType; playerName: string; previousPage: string | null;
   onSubmit: (dataUrl: string) => Promise<boolean> | boolean;
   onLeaveGame: () => Promise<void> | void;
 }
 
-export default function DrawingScreen({ mode, roomId, pageIndex, round, playerCount, map, playerName, previousPage, onSubmit, onLeaveGame }: DrawingScreenProps) {
+export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, playerCount, map, playerName, previousPage, onSubmit, onLeaveGame }: DrawingScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<DrawingSurface | null>(null);
@@ -59,12 +59,12 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, playerCo
     const canvas = canvasRef.current; if (!canvas) return;
     let cancelled = false; setLoadingDrawing(true); setAutosaveState("idle"); setSubmitError(null);
     const surface = new DrawingSurface(canvas, { worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT, map, time });
-    const session = new DrawingSession(surface); const adapter = new RelayPageDrawingAdapter({ roomId, pageIndex, persistence: new FirebaseDrawingPersistence() }); const lifecycle = new RelayPageDrawingLifecycle(session, adapter);
+    const session = new DrawingSession(surface); const adapter = new RelayPageDrawingAdapter({ roomId, gameId, pageIndex, persistence: new FirebaseDrawingPersistence() }); const lifecycle = new RelayPageDrawingLifecycle(session, adapter);
     surfaceRef.current = surface; sessionRef.current = session; lifecycleRef.current = lifecycle; resize();
     const initialize = async () => { try { await lifecycle.initialize(); if (previousPage) await surface.loadImage(previousPage); } finally { if (!cancelled) setLoadingDrawing(false); } };
     void initialize(); const observer = new ResizeObserver(resize); const container = containerRef.current; if (container) observer.observe(container);
     return () => { cancelled = true; if (autosaveTimerRef.current !== null) window.clearTimeout(autosaveTimerRef.current); observer.disconnect(); session.end(); if (surfaceRef.current === surface) surfaceRef.current = null; if (sessionRef.current === session) sessionRef.current = null; if (lifecycleRef.current === lifecycle) lifecycleRef.current = null; };
-  }, [map, pageIndex, previousPage, resize, roomId, time]);
+  }, [gameId, map, pageIndex, previousPage, resize, roomId, time]);
 
   useEffect(() => { const handleVisibilityChange = () => { if (document.visibilityState !== "hidden") return; if (autosaveTimerRef.current !== null) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; } void saveSnapshotNow(); }; document.addEventListener("visibilitychange", handleVisibilityChange); return () => document.removeEventListener("visibilitychange", handleVisibilityChange); }, [saveSnapshotNow]);
 
