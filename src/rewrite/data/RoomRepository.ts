@@ -9,8 +9,18 @@ import {
   type Unsubscribe,
 } from "firebase/database";
 import { db } from "../../lib/firebase";
-import { getDefaultGameMode, type MapType, type Player, type RoomState } from "../domain";
-import { createGameState } from "../game/GameState";
+import {
+  createDefaultLobbyConfig,
+  generateGameId,
+  getDefaultGameMode,
+  type MapType,
+  type Player,
+  type RoomState,
+} from "../domain";
+import {
+  createGameState,
+  type GameState,
+} from "../game/GameState";
 import type { GameModeId } from "../game/GameMode";
 import { createRelayModeState } from "../game/RelayModeState";
 import {
@@ -28,8 +38,12 @@ function roomRef(roomId: string) {
   return ref(db, `rooms/${roomId}`);
 }
 
-function relayPagesRef(roomId: string) {
-  return ref(db, `relayPages/${roomId}`);
+function gameRef(gameId: string) {
+  return ref(db, `games/${gameId}`);
+}
+
+function relayPagesRef(gameId: string) {
+  return ref(db, `relayPages/${gameId}`);
 }
 
 export function watchRoom(
@@ -41,31 +55,36 @@ export function watchRoom(
   });
 }
 
-/**
- * 接力頁面圖片獨立監聽，不再與 room/game transaction 綁在同一個大型節點。
- */
+export function watchGame(
+  gameId: string,
+  callback: (game: GameState | null) => void
+): Unsubscribe {
+  return onValue(gameRef(gameId), (snapshot) => {
+    callback(snapshot.val() as GameState | null);
+  });
+}
+
 export function watchRelayPages(
-  roomId: string,
+  gameId: string,
   callback: (pages: Record<string, string>) => void
 ): Unsubscribe {
-  return onValue(relayPagesRef(roomId), (snapshot) => {
+  return onValue(relayPagesRef(gameId), (snapshot) => {
     callback((snapshot.val() as Record<string, string> | null) ?? {});
   });
 }
 
-export async function upsertPlayer(roomId: string, player: Player): Promise<void> {
+export async function upsertPlayer(
+  roomId: string,
+  player: Player
+): Promise<void> {
   await runTransaction(
     roomRef(roomId),
     (current: RoomState | null) => {
       if (!current) {
-        const mode = getDefaultGameMode();
-        const game = createGameState(mode, null);
-        if (mode === "relay-30") game.modeState = createRelayModeState();
-
         return {
-          map: "earth",
-          game,
           players: { [player.id]: player },
+          currentGameId: null,
+          lobby: createDefaultLobbyConfig(),
           createdAt: Date.now(),
         } satisfies RoomState;
       }
@@ -76,7 +95,9 @@ export async function upsertPlayer(roomId: string, player: Player): Promise<void
           ...current.players,
           [player.id]: {
             ...player,
-            joinedAt: current.players[player.id]?.joinedAt ?? player.joinedAt,
+            joinedAt:
+              current.players[player.id]?.joinedAt ??
+              player.joinedAt,
           },
         },
       } satisfies RoomState;
@@ -85,12 +106,21 @@ export async function upsertPlayer(roomId: string, player: Player): Promise<void
   );
 }
 
-export async function startPlayerPresence(roomId: string, playerId: string): Promise<void> {
+export async function startPlayerPresence(
+  roomId: string,
+  playerId: string
+): Promise<void> {
   const playerRef = ref(db, `rooms/${roomId}/players/${playerId}`);
   await onDisconnect(playerRef).remove();
 }
 
-export async function leaveRoom(roomId: string, playerId: string): Promise<boolean> {
+export async function leaveRoom(
+  roomId: string,
+  playerId: string
+): Promise<boolean> {
+  const roomSnapshot = await get(roomRef(roomId));
+  const room = roomSnapshot.val() as RoomState | null;
+
   const result = await runTransaction(
     roomRef(roomId),
     (current: RoomState | null) => {
@@ -98,23 +128,60 @@ export async function leaveRoom(roomId: string, playerId: string): Promise<boole
 
       const nextPlayers = { ...current.players };
       delete nextPlayers[playerId];
+
       if (Object.keys(nextPlayers).length === 0) return null;
 
-      const nextRoom: RoomState = { ...current, players: nextPlayers };
-      return recoverMissingCurrentPlayer(nextRoom) ?? nextRoom;
+      return {
+        ...current,
+        players: nextPlayers,
+      } satisfies RoomState;
     },
     { applyLocally: false }
   );
 
+  if (
+    result.committed &&
+    room?.currentGameId
+  ) {
+    await recoverMissingCurrentPlayerTurn(
+      roomId,
+      room.currentGameId
+    );
+  }
+
   return result.committed;
 }
 
-export async function recoverMissingCurrentPlayerTurn(roomId: string): Promise<boolean> {
+export async function recoverMissingCurrentPlayerTurn(
+  roomId: string,
+  gameId: string
+): Promise<boolean> {
+  const [roomSnapshot, gameSnapshot] = await Promise.all([
+    get(roomRef(roomId)),
+    get(gameRef(gameId)),
+  ]);
+
+  const room = roomSnapshot.val() as RoomState | null;
+  const game = gameSnapshot.val() as GameState | null;
+
+  if (!room || !game || room.currentGameId !== gameId) {
+    return false;
+  }
+
+  const activePlayerIds = new Set(Object.keys(room.players));
+  const recovered = recoverMissingCurrentPlayer(game, activePlayerIds);
+
+  if (!recovered) return false;
+
   const result = await runTransaction(
-    roomRef(roomId),
-    (current: RoomState | null) => {
+    gameRef(gameId),
+    (current: GameState | null) => {
       if (!current) return;
-      return recoverMissingCurrentPlayer(current) ?? undefined;
+      if (current.roomId !== roomId) return;
+      return recoverMissingCurrentPlayer(
+        current,
+        activePlayerIds
+      ) ?? undefined;
     },
     { applyLocally: false }
   );
@@ -127,64 +194,120 @@ export async function startGame(
   playerId: string,
   map: MapType,
   mode: GameModeId = getDefaultGameMode()
-): Promise<void> {
+): Promise<string> {
+  const gameId = generateGameId();
+  const createdAt = Date.now();
+
+  let gameToCreate: GameState | null = null;
+
   const result = await runTransaction(
     roomRef(roomId),
     (current: RoomState | null) => {
       if (!canStartGame(current, playerId)) return;
+      if (!current) return;
 
-      const players = current?.players ?? {};
-      const hostId = getHostId(current);
-      if (!hostId) return;
+      const participants = orderPlayers(current.players);
+      if (participants.length === 0) return;
 
-      const game = createGameState(mode, hostId);
-      game.phase = "playing";
-      game.currentTurn = 1;
-      if (mode === "relay-30") game.modeState = createRelayModeState();
+      const participantIds = participants.map((player) => player.id);
+      const currentPlayerId = participantIds[0] ?? null;
+
+      const modeState =
+        mode === "relay-30"
+          ? createRelayModeState()
+          : {};
+
+      gameToCreate = createGameState({
+        gameId,
+        roomId,
+        mode,
+        map,
+        participantIds,
+        currentPlayerId,
+        createdAt,
+        modeState,
+      });
 
       return {
-        map,
-        game,
-        createdAt: current?.createdAt ?? Date.now(),
-        players,
+        ...current,
+        currentGameId: gameId,
+        lobby: {
+          selectedMode: mode,
+          selectedMap: map,
+        },
       } satisfies RoomState;
     },
     { applyLocally: false }
   );
 
-  if (result.committed && mode === "relay-30") {
-    await remove(relayPagesRef(roomId));
+  if (!result.committed || !gameToCreate) {
+    throw new Error("無法開始遊戲");
   }
+
+  try {
+    await set(gameRef(gameId), gameToCreate);
+  } catch (error) {
+    await runTransaction(
+      roomRef(roomId),
+      (current: RoomState | null) => {
+        if (!current || current.currentGameId !== gameId) return;
+        return {
+          ...current,
+          currentGameId: null,
+        } satisfies RoomState;
+      },
+      { applyLocally: false }
+    );
+    throw error;
+  }
+
+  return gameId;
 }
 
-/**
- * 頁面先寫入獨立路徑，再用小型 room transaction 推進回合。
- *
- * currentTurn 使用一次性 get() 讀取，不再以 onValue 包 Promise。
- * 這避免送出流程額外建立監聽器，也讓目前回合的讀取、頁面寫入、回合推進
- * 都是明確的 await 順序。
- */
-export async function submitRound(roomId: string, playerId: string, pageDataUrl: string): Promise<boolean> {
+export async function submitRound(
+  roomId: string,
+  gameId: string,
+  playerId: string,
+  pageDataUrl: string
+): Promise<boolean> {
   if (!pageDataUrl.startsWith("data:image/")) {
     throw new Error("送出作品格式無效");
   }
 
-  if (new TextEncoder().encode(pageDataUrl).byteLength > MAX_RELAY_PAGE_BYTES) {
+  if (
+    new TextEncoder().encode(pageDataUrl).byteLength >
+    MAX_RELAY_PAGE_BYTES
+  ) {
     throw new Error("作品快照過大，請稍後重新整理後再送出");
   }
 
-  const pageTurnSnapshot = await get(ref(db, `rooms/${roomId}/game/currentTurn`));
-  const turnSnapshot = pageTurnSnapshot.val();
+  const gameSnapshot = await get(gameRef(gameId));
+  const game = gameSnapshot.val() as GameState | null;
 
-  if (typeof turnSnapshot !== "number" || turnSnapshot < 1) return false;
+  if (
+    !game ||
+    game.roomId !== roomId ||
+    !canSubmitRound(game, playerId)
+  ) {
+    return false;
+  }
 
-  await set(ref(db, `relayPages/${roomId}/${turnSnapshot}`), pageDataUrl);
+  const turnSnapshot = game.currentTurn;
+  if (turnSnapshot < 1) return false;
+
+  await set(
+    ref(db, `relayPages/${gameId}/${turnSnapshot}`),
+    pageDataUrl
+  );
 
   const result = await runTransaction(
-    roomRef(roomId),
-    (current: RoomState | null) => {
-      if (!current || !canSubmitRound(current, playerId)) return;
-      if (current.game.currentTurn !== turnSnapshot) return;
+    gameRef(gameId),
+    (current: GameState | null) => {
+      if (!current) return;
+      if (current.roomId !== roomId) return;
+      if (!canSubmitRound(current, playerId)) return;
+      if (current.currentTurn !== turnSnapshot) return;
+
       return nextRoundState(current) ?? undefined;
     },
     { applyLocally: false }
@@ -193,10 +316,15 @@ export async function submitRound(roomId: string, playerId: string, pageDataUrl:
   return result.committed;
 }
 
-export function getOrderedPlayers(room: RoomState | null): Player[] {
+export function getOrderedPlayers(
+  room: RoomState | null
+): Player[] {
   return orderPlayers(room?.players);
 }
 
-export function isRoomHost(room: RoomState | null, playerId: string): boolean {
+export function isRoomHost(
+  room: RoomState | null,
+  playerId: string
+): boolean {
   return getHostId(room) === playerId;
 }
