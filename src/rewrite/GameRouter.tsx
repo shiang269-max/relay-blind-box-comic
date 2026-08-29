@@ -1,17 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ref, set } from "firebase/database";
 import { db } from "../lib/firebase";
-import { type Comic, type Player, type RoomState } from "./domain";
+import {
+  generateComicId,
+  type Comic,
+  type Player,
+  type RoomState,
+} from "./domain";
 import { watchRelayPages } from "./data/RoomRepository";
+import type { GameState } from "./game/GameState";
 import { getGameFlow } from "./game/getGameFlow";
 import { getGameMode } from "./game/GameMode";
-import { asRelayModeState } from "./game/GameRules";
 import DrawingScreen from "./DrawingScreen";
 import ReviewPage from "./pages/ReviewPage";
 import WaitingPage from "./pages/WaitingPage";
 
 interface GameRouterProps {
-  room: RoomState | null;
+  room: RoomState;
+  game: GameState;
   players: Player[];
   submit: (pageDataUrl: string) => Promise<boolean>;
   roomId: string;
@@ -22,6 +28,7 @@ interface GameRouterProps {
 
 export default function GameRouter({
   room,
+  game,
   players,
   submit,
   roomId,
@@ -36,54 +43,52 @@ export default function GameRouter({
     setRelayPages({});
     setRelayPagesLoaded(false);
 
-    return watchRelayPages(roomId, (nextPages) => {
+    return watchRelayPages(game.gameId, (nextPages) => {
       setRelayPages(nextPages);
       setRelayPagesLoaded(true);
     });
-  }, [roomId]);
+  }, [game.gameId]);
 
-  const legacyRelayPages = useMemo(() => {
-    if (!room || (room.game.mode ?? "relay-30") !== "relay-30") return {};
-    return asRelayModeState(room.game).pages;
-  }, [room]);
-
-  const pages = Object.keys(relayPages).length > 0 ? relayPages : legacyRelayPages;
-
-  const saveComic = useCallback(async (title: string) => {
-    if (!room || (room.game.mode ?? "relay-30") !== "relay-30") return;
-
-    await set(ref(db, `comics/${roomId}`), {
-      id: roomId,
-      title: title.trim() || "未命名漫畫",
-      createdAt: room.createdAt ?? Date.now(),
-      map: room.map,
-      pages,
-    });
-  }, [pages, room, roomId]);
-
-  if (!room) return null;
-
-  const { game } = room;
+  const pages = relayPages;
   const modeId = game.mode ?? "relay-30";
   const mode = getGameMode(modeId);
+
+  const saveComic = useCallback(async (title: string) => {
+    if (modeId !== "relay-30") return;
+
+    const comicId = game.savedComicId ?? generateComicId();
+
+    await set(ref(db, `comics/${comicId}`), {
+      id: comicId,
+      title: title.trim() || "未命名漫畫",
+      createdAt: game.createdAt,
+      map: game.map,
+      pages,
+    });
+  }, [game.createdAt, game.map, game.savedComicId, modeId, pages]);
 
   if (game.phase === "playing") {
     const flow = getGameFlow(modeId);
 
     if (game.currentPlayerId === playerId) {
       if (modeId !== "relay-30") {
-        return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={room.map} />;
+        return (
+          <WaitingPage
+            round={game.currentTurn}
+            totalRounds={mode.totalRounds}
+            modeLabel={mode.label}
+            currentPlayerName="此模式尚未開放"
+            map={game.map}
+          />
+        );
       }
 
       const previousKey = flow.getPreviousDrawingKey({
         currentRound: game.currentTurn,
         currentPlayerId: game.currentPlayerId,
-        playerIds: players.map((player) => player.id),
+        playerIds: game.participantIds,
       });
 
-      // 回合狀態與 relayPages 是兩條 Firebase 監聽路徑。
-      // currentTurn 可能先更新，relayPages 才稍後到達。此時不能先建立空白
-      // DrawingScreen，否則下一次 pages 到達時會重新初始化畫布，看起來就像作品被清掉。
       if (previousKey && (!relayPagesLoaded || !pages[previousKey])) {
         return (
           <WaitingPage
@@ -91,12 +96,14 @@ export default function GameRouter({
             totalRounds={mode.totalRounds}
             modeLabel={mode.label}
             currentPlayerName="正在載入上一頁作品"
-            map={room.map}
+            map={game.map}
           />
         );
       }
 
-      const previousPage = previousKey ? pages[previousKey] : null;
+      const previousPage = previousKey
+        ? pages[previousKey]
+        : null;
 
       return (
         <DrawingScreen
@@ -104,8 +111,8 @@ export default function GameRouter({
           roomId={roomId}
           pageIndex={Math.max(0, game.currentTurn - 1)}
           round={game.currentTurn}
-          playerCount={Math.max(1, players.length)}
-          map={room.map}
+          playerCount={Math.max(1, game.participantIds.length)}
+          map={game.map}
           playerName={playerName}
           previousPage={previousPage ?? null}
           onSubmit={submit}
@@ -113,39 +120,58 @@ export default function GameRouter({
       );
     }
 
-    const currentPlayer = players.find((player) => player.id === game.currentPlayerId);
+    const currentPlayer = players.find(
+      (player) => player.id === game.currentPlayerId
+    );
+
     return (
       <WaitingPage
         round={game.currentTurn}
         totalRounds={mode.totalRounds}
         modeLabel={mode.label}
-        currentPlayerName={currentPlayer?.name ?? "其他玩家"}
-        map={room.map}
+        currentPlayerName={currentPlayer?.name ?? "等待玩家重新連線"}
+        map={game.map}
       />
     );
   }
 
   if (game.phase === "review") {
     if (modeId !== "relay-30") {
-      return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={room.map} />;
+      return (
+        <WaitingPage
+          round={game.currentTurn}
+          totalRounds={mode.totalRounds}
+          modeLabel={mode.label}
+          currentPlayerName="此模式尚未開放"
+          map={game.map}
+        />
+      );
     }
 
-    if (!relayPagesLoaded && Object.keys(legacyRelayPages).length === 0) {
-      return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="正在載入漫畫成果" map={room.map} />;
+    if (!relayPagesLoaded) {
+      return (
+        <WaitingPage
+          round={game.currentTurn}
+          totalRounds={mode.totalRounds}
+          modeLabel={mode.label}
+          currentPlayerName="正在載入漫畫成果"
+          map={game.map}
+        />
+      );
     }
 
     const comic: Comic = {
-      id: roomId,
+      id: game.savedComicId ?? game.gameId,
       title: "本局成果",
-      createdAt: room.createdAt ?? Date.now(),
-      map: room.map,
+      createdAt: game.createdAt,
+      map: game.map,
       pages,
     };
 
     return (
       <ReviewPage
         comic={comic}
-        map={room.map}
+        map={game.map}
         totalPages={mode.totalRounds ?? 30}
         onBack={onLeaveGame}
         onSave={saveComic}
@@ -153,5 +179,13 @@ export default function GameRouter({
     );
   }
 
-  return <WaitingPage round={game.currentTurn ?? 1} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="等待遊戲狀態" map={room.map} />;
+  return (
+    <WaitingPage
+      round={game.currentTurn ?? 1}
+      totalRounds={mode.totalRounds}
+      modeLabel={mode.label}
+      currentPlayerName="等待遊戲狀態"
+      map={game.map}
+    />
+  );
 }
