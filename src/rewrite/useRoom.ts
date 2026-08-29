@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { MapType, Player, RoomState } from "./domain";
+import type { MapType, RoomState } from "./domain";
 import type { GameState } from "./game/GameState";
 import { closeCurrentGame, getOrderedPlayers, isRoomHost, leaveRoom, recoverMissingCurrentPlayerTurn, startGame, startPlayerPresence, submitRound, touchPlayer, upsertPlayer, watchGame, watchRoom } from "./data/RoomRepository";
 
