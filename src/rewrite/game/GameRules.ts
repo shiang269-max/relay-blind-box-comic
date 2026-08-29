@@ -30,9 +30,9 @@ export function orderPlayers(players: Record<string, Player> | undefined): Playe
 
 export function getHostId(room: RoomState | null): string | null { return orderPlayers(room?.players)[0]?.id ?? null; }
 
-/** 可開始新局的必要條件：沒有進行中的 gameId，且房間至少有一位目前仍在線的玩家。 */
+/** Firebase RTDB does not persist null-valued fields, so a room without a current game may read as null or undefined. */
 export function canStartGame(room: RoomState | null, playerId: string): boolean {
-  if (!room || room.currentGameId !== null) return false;
+  if (!room || room.currentGameId != null) return false;
   return getHostId(room) === playerId;
 }
 
