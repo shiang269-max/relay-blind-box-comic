@@ -18,6 +18,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
   const pinchDistance = useRef<number | null>(null);
   const pinchCenter = useRef<ScreenPoint | null>(null);
   const panPoint = useRef<ScreenPoint | null>(null);
+  const panMoved = useRef(false);
   const velocity = useRef({ x: 0, y: 0, time: 0 });
   const inertiaFrame = useRef<number | null>(null);
 
@@ -94,6 +95,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     if (activePointers.current.size >= 2) {
       session.end();
       panPoint.current = null;
+      panMoved.current = false;
       velocity.current = { x: 0, y: 0, time: 0 };
       resetPinch();
       return;
@@ -102,6 +104,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     if (moveMode) {
       session.end();
       panPoint.current = screen;
+      panMoved.current = false;
       velocity.current = { x: 0, y: 0, time: performance.now() };
       return;
     }
@@ -135,6 +138,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     if (moveMode && panPoint.current) {
       const dx = screen.x - panPoint.current.x;
       const dy = screen.y - panPoint.current.y;
+      if (Math.hypot(dx, dy) > 3) panMoved.current = true;
       const now = performance.now();
       const dt = Math.max(1, now - velocity.current.time);
       surface.camera.panByScreen(dx, dy);
@@ -149,6 +153,8 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
 
   const finishPointer = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget;
+    const surface = surfaceRef.current;
+    const screen = surface?.eventToScreen(event.nativeEvent) ?? null;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     activePointers.current.delete(event.pointerId);
     const session = sessionRef.current;
@@ -165,17 +171,32 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     if (activePointers.current.size === 1) {
       const remaining = [...activePointers.current.values()][0];
       panPoint.current = moveMode ? remaining : null;
+      panMoved.current = false;
       velocity.current = { x: 0, y: 0, time: performance.now() };
       session?.end();
       return;
     }
 
     const wasMoving = moveMode && panPoint.current !== null;
+    const shouldFocus = Boolean(
+      moveMode &&
+      !panMoved.current &&
+      surface &&
+      screen &&
+      surface.camera.zoom <= surface.camera.minimumZoom * 1.35
+    );
     panPoint.current = null;
     session?.end();
+
+    if (shouldFocus && surface && screen) {
+      surface.camera.focusAtScreen(screen);
+      surface.render();
+      return;
+    }
+
     if (wasMoving) startInertia();
     else if (!moveMode) onStrokeEnd?.();
-  }, [moveMode, onStrokeEnd, resetPinch, sessionRef, startInertia]);
+  }, [moveMode, onStrokeEnd, resetPinch, sessionRef, startInertia, surfaceRef]);
 
   const handleWheel = useCallback((event: WheelEvent) => {
     event.preventDefault();
