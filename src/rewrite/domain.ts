@@ -36,8 +36,32 @@ export interface Comic {
   map?: MapType;
 }
 
+function createRandomIdSource(): string {
+  if (typeof crypto !== "undefined") {
+    if (typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID().replace(/-/g, "");
+    }
+
+    if (typeof crypto.getRandomValues === "function") {
+      const values = new Uint32Array(4);
+      crypto.getRandomValues(values);
+      return Array.from(values, (value) => value.toString(16).padStart(8, "0")).join("");
+    }
+  }
+
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random()
+    .toString(36)
+    .slice(2)}`;
+}
+
 export function generateId(length: number): string {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, length);
+  let value = "";
+
+  while (value.length < length) {
+    value += createRandomIdSource();
+  }
+
+  return value.slice(0, length);
 }
 
 export function generateRoomId(): string {
