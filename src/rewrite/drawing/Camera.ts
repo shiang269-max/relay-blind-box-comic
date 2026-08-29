@@ -16,8 +16,8 @@ export interface Size {
  * - position：世界座標中的左上角視點
  * - zoom：每 1 世界單位對應多少 CSS 像素
  *
- * 最低縮放是「完整世界都能收進 viewport」的倍率，
- * 因此手機直向畫布可以從初始視角再縮小，並持續維持世界背景與畫布一致。
+ * 最低縮放永遠是「完整世界剛好收進 viewport」的倍率。
+ * 因此縮小只能回到完整世界，不能再縮到把整個畫布變成一個小圖示。
  */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
@@ -27,7 +27,6 @@ export class Camera {
 
   constructor(
     private readonly world: Size,
-    private readonly absoluteMinZoom = 0.01,
     private readonly maxZoom = 10
   ) {}
 
@@ -129,17 +128,14 @@ export class Camera {
   }
 
   private fitZoom(): number {
-    return Math.max(
-      this.absoluteMinZoom,
-      Math.min(
-        this.viewport.width / this.world.width,
-        this.viewport.height / this.world.height
-      )
+    return Math.min(
+      this.viewport.width / this.world.width,
+      this.viewport.height / this.world.height
     );
   }
 
   private clampZoom(zoom: number): number {
-    return Math.max(this.absoluteMinZoom, Math.min(this.maxZoom, zoom));
+    return Math.max(this.fitZoom(), Math.min(this.maxZoom, zoom));
   }
 
   private clamp(): void {
