@@ -33,7 +33,6 @@ function AppRewrite() {
 
   if (viewingComic) return <ReviewPage comic={viewingComic} map={viewingComic.map ?? "earth"} onBack={() => setViewingComic(null)} readOnly />;
   if (screen === "history") return <HistoryPage onBack={() => setScreen("lobby")} onOpen={setViewingComic} />;
-
   if (!connected) return <LobbyPage roomId={roomId} playerName={playerName} players={[]} isHost={false} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
   if (loading) return <div style={{ minHeight: Math.max(viewportHeight, 320), width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", background: "#020617", color: "#ffffff", fontSize: 18 }}>正在連線至遊戲房間…</div>;
   if (error) return <div style={{ minHeight: Math.max(viewportHeight, 320), width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "#020617", color: "#ffffff", fontSize: 16, textAlign: "center" }}>{error}</div>;
