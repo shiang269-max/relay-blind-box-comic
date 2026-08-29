@@ -15,24 +15,20 @@ interface GameRouterProps { room: RoomState; game: GameState; players: Player[];
 export default function GameRouter({ game, players, submit, roomId, playerId, playerName, onLeaveGame }: GameRouterProps) {
   const [relayPages, setRelayPages] = useState<Record<string, string>>({});
   const [relayPagesLoaded, setRelayPagesLoaded] = useState(false);
-  useEffect(() => { setRelayPages({}); setRelayPagesLoaded(false); return watchRelayPages(game.gameId, (nextPages) => { setRelayPages(nextPages); setRelayPagesLoaded(true); }); }, [game.gameId]);
-  const pages = relayPages; const modeId = game.mode; const mode = getGameMode(modeId);
 
+  useEffect(() => { setRelayPages({}); setRelayPagesLoaded(false); return watchRelayPages(game.gameId, (nextPages) => { setRelayPages(nextPages); setRelayPagesLoaded(true); }); }, [game.gameId]);
+
+  const pages = relayPages;
+  const modeId = game.mode;
+  const mode = getGameMode(modeId);
   const saveComic = useCallback(async (title: string) => {
     if (modeId !== "relay-30") return;
-    const gameSnapshot = await runTransaction(ref(db, `games/${game.gameId}`), (current: GameState | null) => {
-      if (!current || current.roomId !== roomId || current.phase !== "review") return;
-      if (current.savedComicId) return current;
-      return { ...current, savedComicId: generateComicId() } satisfies GameState;
-    }, { applyLocally: false });
-    const savedGame = gameSnapshot.snapshot.val() as GameState | null;
-    const comicId = savedGame?.savedComicId;
-    if (!comicId) throw new Error("無法建立漫畫封存識別");
+    const gameSnapshot = await runTransaction(ref(db, `games/${game.gameId}`), (current: GameState | null) => { if (!current || current.roomId !== roomId || current.phase !== "review") return; if (current.savedComicId) return current; return { ...current, savedComicId: generateComicId() } satisfies GameState; }, { applyLocally: false });
+    const savedGame = gameSnapshot.snapshot.val() as GameState | null; const comicId = savedGame?.savedComicId; if (!comicId) throw new Error("無法建立漫畫封存識別");
     await set(ref(db, `comics/${comicId}`), { id: comicId, title: title.trim() || "未命名漫畫", createdAt: game.completedAt ?? game.createdAt, map: game.map, pages } satisfies Comic);
   }, [game.completedAt, game.createdAt, game.gameId, game.map, modeId, pages, roomId]);
-
-  const finishGame = useCallback(async () => { onLeaveGame(); void closeCurrentGame(roomId, game.gameId); }, [game.gameId, onLeaveGame, roomId]);
-  const leaveGame = useCallback(async () => { onLeaveGame(); void leaveRoom(roomId, playerId); }, [onLeaveGame, playerId, roomId]);
+  const finishGame = useCallback(async () => { await closeCurrentGame(roomId, game.gameId); onLeaveGame(); }, [game.gameId, onLeaveGame, roomId]);
+  const leaveGame = useCallback(async () => { await leaveRoom(roomId, playerId); onLeaveGame(); }, [onLeaveGame, playerId, roomId]);
 
   if (game.phase === "playing") {
     const flow = getGameFlow(modeId);
