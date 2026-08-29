@@ -30,7 +30,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, playerCo
   const autosaveQueuedRef = useRef(false);
 
   const [color, setColor] = useState("#000000");
-  const [size, setSize] = useState(12);
+  const [size, setSize] = useState(5);
   const [eraser, setEraser] = useState(false);
   const [moveMode, setMoveMode] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -98,10 +98,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, playerCo
       <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-xs font-bold shadow-lg backdrop-blur-md"><ModeIcon size={18} />{modeLabel}</div>
       <div className="absolute right-3 top-3 z-20">
         <button onClick={() => setPaletteOpen((value) => !value)} className={`flex min-h-11 min-w-11 items-center justify-center rounded-xl border shadow-lg backdrop-blur-md ${paletteOpen ? "border-cyan-300/60 bg-cyan-500 text-slate-950" : "border-white/15 bg-slate-950/70 text-white"}`} aria-label="開啟調色盤" title="調色盤"><Palette size={20} /></button>
-        {paletteOpen && <div className="absolute right-0 top-13 mt-2 w-56 rounded-2xl border border-white/15 bg-slate-950/90 p-3 shadow-2xl backdrop-blur-xl">
-          <div className="mb-2 text-xs font-bold text-white/70">選擇顏色</div>
-          <div className="grid grid-cols-5 gap-2">{COLORS.map((item) => <button key={item} onClick={() => { setColor(item); setEraser(false); setMoveMode(false); setPaletteOpen(false); }} className={`h-9 w-9 rounded-full border-2 transition-transform active:scale-90 ${color === item && !eraser ? "scale-110 border-white" : "border-white/25"}`} style={{ backgroundColor: item }} aria-label={`選擇顏色 ${item}`} />)}</div>
-        </div>}
+        {paletteOpen && <div className="absolute right-0 top-13 mt-2 w-56 rounded-2xl border border-white/15 bg-slate-950/90 p-3 shadow-2xl backdrop-blur-xl"><div className="mb-2 text-xs font-bold text-white/70">選擇顏色</div><div className="grid grid-cols-5 gap-2">{COLORS.map((item) => <button key={item} onClick={() => { setColor(item); setEraser(false); setMoveMode(false); setPaletteOpen(false); }} className={`h-9 w-9 rounded-full border-2 transition-transform active:scale-90 ${color === item && !eraser ? "scale-110 border-white" : "border-white/25"}`} style={{ backgroundColor: item }} aria-label={`選擇顏色 ${item}`} />)}</div></div>}
       </div>
       {loadingDrawing && <div className="absolute inset-0 flex items-center justify-center bg-slate-950/35 text-sm font-medium text-white backdrop-blur-sm">載入繪圖資料中...</div>}
     </main>
