@@ -39,20 +39,14 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault(); const surface = surfaceRef.current, session = sessionRef.current; if (!surface || !session) return;
-    // Android 瀏覽器可能把多個觸控取樣合併成一次 pointermove。
-    // 必須逐一處理，否則快速畫圓會變成少量直線，而且筆跡永遠落後手指。
-    const native = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
-    const samples = native.getCoalescedEvents?.() ?? [native];
-    for (const sample of samples) {
-      const screen = surface.eventToScreen(sample); if (pointers.current.has(sample.pointerId)) pointers.current.set(sample.pointerId, screen);
-      if (moveMode && pointers.current.size >= 2) { const value = pinch(); if (value && pinchDistance.current && pinchCenter.current) { surface.camera.zoomAt(pinchCenter.current, value.distance / pinchDistance.current); surface.camera.panByScreen(value.center.x - pinchCenter.current.x, value.center.y - pinchCenter.current.y); } pinchDistance.current = value?.distance ?? null; pinchCenter.current = value?.center ?? null; state("pinching"); continue; }
-      if (!moveMode && pointers.current.size > 1) continue;
-      if (moveMode && panPoint.current) { const dx = screen.x - panPoint.current.x, dy = screen.y - panPoint.current.y, now = performance.now(), dt = Math.max(1, now - velocity.current.time); surface.camera.panByScreen(dx, dy); panPoint.current = screen; velocity.current = { x: dx / dt, y: dy / dt, time: now }; state("moving"); continue; }
-      const waiting = pending.current;
-      if (waiting && waiting.id === sample.pointerId) { if (Math.hypot(screen.x - waiting.start.x, screen.y - waiting.start.y) < 4) continue; if (!session.begin(surface.camera.screenToWorld(waiting.start), brush())) continue; pending.current = null; drawingId.current = sample.pointerId; }
-      if (drawingId.current === sample.pointerId) { session.move(surface.eventToWorld(sample), brush()); state(brush().eraser ? "eraser" : "drawing"); }
-    }
-    if (moveMode) surface.render();
+    const native = event.nativeEvent;
+    const screen = surface.eventToScreen(native); if (pointers.current.has(native.pointerId)) pointers.current.set(native.pointerId, screen);
+    if (moveMode && pointers.current.size >= 2) { const value = pinch(); if (value && pinchDistance.current && pinchCenter.current) { surface.camera.zoomAt(pinchCenter.current, value.distance / pinchDistance.current); surface.camera.panByScreen(value.center.x - pinchCenter.current.x, value.center.y - pinchCenter.current.y); } pinchDistance.current = value?.distance ?? null; pinchCenter.current = value?.center ?? null; state("pinching"); if (moveMode) surface.render(); return; }
+    if (!moveMode && pointers.current.size > 1) return;
+    if (moveMode && panPoint.current) { const dx = screen.x - panPoint.current.x, dy = screen.y - panPoint.current.y, now = performance.now(), dt = Math.max(1, now - velocity.current.time); surface.camera.panByScreen(dx, dy); panPoint.current = screen; velocity.current = { x: dx / dt, y: dy / dt, time: now }; state("moving"); surface.render(); return; }
+    const waiting = pending.current;
+    if (waiting && waiting.id === native.pointerId) { if (Math.hypot(screen.x - waiting.start.x, screen.y - waiting.start.y) < 4) return; if (!session.begin(surface.camera.screenToWorld(waiting.start), brush())) return; pending.current = null; drawingId.current = native.pointerId; }
+    if (drawingId.current === native.pointerId) { session.move(surface.eventToWorld(native), brush()); state(brush().eraser ? "eraser" : "drawing"); }
   }, [brush, moveMode, pinch, sessionRef, state, surfaceRef]);
 
   const finishPointer = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
