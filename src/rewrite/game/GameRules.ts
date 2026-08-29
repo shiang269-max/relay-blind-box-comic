@@ -40,23 +40,17 @@ export function findNextActiveParticipant(
   if (participantIds.length === 0) return null;
 
   if (currentPlayerId === null) {
-    return participantIds.find((playerId) => activePlayerIds.has(playerId)) ?? null;
+    return participantIds.find((id) => activePlayerIds.has(id)) ?? null;
   }
 
   const currentIndex = participantIds.indexOf(currentPlayerId);
-
   if (currentIndex < 0) {
     throw new Error("currentPlayerId 不存在於 game.participantIds");
   }
 
   for (let offset = 1; offset <= participantIds.length; offset += 1) {
-    const playerId = participantIds[
-      (currentIndex + offset) % participantIds.length
-    ];
-
-    if (activePlayerIds.has(playerId)) {
-      return playerId;
-    }
+    const id = participantIds[(currentIndex + offset) % participantIds.length];
+    if (activePlayerIds.has(id)) return id;
   }
 
   return null;
@@ -69,11 +63,7 @@ export function recoverMissingCurrentPlayer(
   if (game.phase !== "playing") return null;
 
   const currentPlayerId = game.currentPlayerId;
-
-  if (
-    currentPlayerId !== null &&
-    activePlayerIds.has(currentPlayerId)
-  ) {
+  if (currentPlayerId !== null && activePlayerIds.has(currentPlayerId)) {
     return null;
   }
 
@@ -84,17 +74,71 @@ export function recoverMissingCurrentPlayer(
   );
 
   if (nextPlayerId === currentPlayerId) return null;
+  return { ...game, currentPlayerId: nextPlayerId };
+}
+
+export function getClearVoteRequiredCount(game: GameState): number {
+  return game.participantIds.length;
+}
+
+export function hasClearVotePassed(game: GameState): boolean {
+  const vote = game.clearVote;
+  if (!vote) return false;
+
+  const participantSet = new Set(game.participantIds);
+  const validVotes = Object.keys(vote.votes).filter((id) =>
+    participantSet.has(id)
+  );
+
+  return validVotes.length >= getClearVoteRequiredCount(game);
+}
+
+export function requestClearVote(
+  game: GameState,
+  playerId: string
+): GameState | null {
+  if (!game.participantIds.includes(playerId)) return null;
+  if (game.clearVote) return null;
 
   return {
     ...game,
-    currentPlayerId: nextPlayerId,
+    clearVote: {
+      requestedBy: playerId,
+      requestedAt: Date.now(),
+      votes: { [playerId]: true },
+    },
   };
 }
 
-/**
- * 正常回合推進只依固定 participantIds 決定順序。
- * 在線狀態與缺席恢復由 recoverMissingCurrentPlayer() 處理。
- */
+export function castClearVote(
+  game: GameState,
+  playerId: string
+): GameState | null {
+  if (!game.clearVote) return null;
+  if (!game.participantIds.includes(playerId)) return null;
+  if (game.clearVote.votes[playerId]) return null;
+
+  return {
+    ...game,
+    clearVote: {
+      ...game.clearVote,
+      votes: {
+        ...game.clearVote.votes,
+        [playerId]: true,
+      },
+    },
+  };
+}
+
+export function cancelClearVote(
+  game: GameState,
+  playerId: string
+): GameState | null {
+  if (!game.clearVote) return null;
+  if (game.clearVote.requestedBy !== playerId) return null;
+  return { ...game, clearVote: null };
+}
+
 export function nextRoundState(game: GameState): GameState | null {
   if (game.phase !== "playing") return null;
   if (game.participantIds.length === 0) return null;
@@ -119,6 +163,7 @@ export function nextRoundState(game: GameState): GameState | null {
     phase: next.phase,
     currentTurn: next.currentRound,
     currentPlayerId: next.currentPlayerId,
+    clearVote: null,
     completedAt:
       enteringReview && game.completedAt === null
         ? Date.now()
@@ -126,17 +171,12 @@ export function nextRoundState(game: GameState): GameState | null {
   };
 }
 
-/**
- * Transitional reader retained until GameRouter and relay page storage finish
- * moving fully to game-scoped paths.
- */
 export function asRelayModeState(game: GameState): RelayModeState {
-  if (isRelayModeState(game.modeState)) return game.modeState;
-  return createRelayModeState();
+  return isRelayModeState(game.modeState)
+    ? game.modeState
+    : createRelayModeState();
 }
 
 function isRelayModeState(value: unknown): value is RelayModeState {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const pages = (value as { pages?: unknown }).pages;
-  return !!pages && typeof pages === "object" && !Array.isArray(pages);
+  return !!value && typeof value === "object" && !Array.isArray(value);
 }
