@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Eraser, Hand, Move, Palette, PenLine, Trash2, Undo2 } from "lucide-react";
+import { Check, Eraser, Hand, LogOut, Move, Palette, PenLine, Trash2, Undo2 } from "lucide-react";
 import { getTimeOfDay, WORLD_HEIGHT, WORLD_WIDTH, type MapType } from "./domain";
 import type { GameMode } from "./game/GameMode";
 import { DrawingSession } from "./drawing/DrawingSession";
@@ -17,9 +17,10 @@ interface DrawingScreenProps {
   mode: GameMode; roomId: string; pageIndex: number; round: number; playerCount: number;
   map: MapType; playerName: string; previousPage: string | null;
   onSubmit: (dataUrl: string) => Promise<boolean> | boolean;
+  onLeaveGame: () => Promise<void> | void;
 }
 
-export default function DrawingScreen({ mode, roomId, pageIndex, round, playerCount, map, playerName, previousPage, onSubmit }: DrawingScreenProps) {
+export default function DrawingScreen({ mode, roomId, pageIndex, round, playerCount, map, playerName, previousPage, onSubmit, onLeaveGame }: DrawingScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<DrawingSurface | null>(null);
@@ -36,6 +37,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, playerCo
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [interaction, setInteraction] = useState<InteractionState>("idle");
   const [submitting, setSubmitting] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [loadingDrawing, setLoadingDrawing] = useState(true);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved">("idle");
@@ -70,11 +72,19 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, playerCo
   useEffect(() => { const canvas = canvasRef.current; if (!canvas) return; canvas.addEventListener("wheel", handleWheel, { passive: false }); return () => canvas.removeEventListener("wheel", handleWheel); }, [handleWheel]);
 
   const handleSubmit = async () => {
-    const session = sessionRef.current, lifecycle = lifecycleRef.current; if (!session || !lifecycle || submitting || loadingDrawing) return;
+    const session = sessionRef.current, lifecycle = lifecycleRef.current; if (!session || !lifecycle || submitting || loadingDrawing || leaving) return;
     setSubmitting(true); setSubmitError(null);
     try { if (autosaveTimerRef.current !== null) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; } await lifecycle.saveSnapshot(); const committed = await onSubmit(session.exportPng()); if (!committed) setSubmitError("目前回合已經變更，作品暫存已保留，請等待最新房間狀態。"); }
     catch (error) { console.error("送出回合失敗", error); setSubmitError("送出失敗，作品暫存已保留，可以重新嘗試。"); }
     finally { setSubmitting(false); }
+  };
+
+  const handleLeave = async () => {
+    if (submitting || leaving) return;
+    if (!window.confirm("確定離開目前遊戲？\n\n你將正式退出這個房間並返回首頁。若你是房間內最後一名玩家，這一局未完成的遊戲會直接結束。")) return;
+    setLeaving(true);
+    try { await onLeaveGame(); }
+    catch (error) { console.error("離開遊戲失敗", error); setSubmitError("離開遊戲失敗，請稍後再試。"); setLeaving(false); }
   };
 
   const progress = mode.totalRounds === null ? null : Math.min(100, (round / mode.totalRounds) * 100);
@@ -87,7 +97,7 @@ export default function DrawingScreen({ mode, roomId, pageIndex, round, playerCo
   return <div className="relative flex w-screen flex-col overflow-hidden text-white" style={{ height: "var(--app-height, 100svh)", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
     <GameAtmosphere map={map} round={round} />
     <header className="relative z-10 shrink-0 border-b border-white/10 bg-slate-950/35 px-3 py-2 backdrop-blur-xl">
-      <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{playerName} 的回合</div><div className="truncate text-xs text-white/70">{mode.label} · {roundLabel} · {timeLabel}{autosaveLabel ? ` · ${autosaveLabel}` : ""}</div></div><button onClick={handleSubmit} disabled={submitting || loadingDrawing} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-green-500/90 px-4 text-sm font-bold shadow-lg shadow-green-950/30 disabled:opacity-50"><Check size={18} />{loadingDrawing ? "載入中" : submitting ? "送出中" : "送出"}</button></div>
+      <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{playerName} 的回合</div><div className="truncate text-xs text-white/70">{mode.label} · {roundLabel} · {timeLabel}{autosaveLabel ? ` · ${autosaveLabel}` : ""}</div></div><button onClick={handleLeave} disabled={submitting || leaving} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-white/10 px-3 text-sm font-bold disabled:opacity-50" title="離開遊戲"><LogOut size={18} />{leaving ? "離開中" : "離開"}</button><button onClick={handleSubmit} disabled={submitting || loadingDrawing || leaving} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-green-500/90 px-4 text-sm font-bold shadow-lg shadow-green-950/30 disabled:opacity-50"><Check size={18} />{loadingDrawing ? "載入中" : submitting ? "送出中" : "送出"}</button></div>
       {progress !== null && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-amber-200 to-indigo-300 transition-[width] duration-700" style={{ width: `${progress}%` }} /></div>}
       {submitError && <div className="mt-2 rounded-xl border border-red-300/20 bg-red-950/45 px-3 py-2 text-xs text-red-100">{submitError}</div>}
     </header>
