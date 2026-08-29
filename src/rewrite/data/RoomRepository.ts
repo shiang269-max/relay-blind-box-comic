@@ -16,6 +16,7 @@ function relayPagesRef(gameId: string) { return ref(db, `relayPages/${gameId}`);
 function normalizePlayers(players: unknown): Record<string, Player> { if (!players || typeof players !== "object" || Array.isArray(players)) return {}; return players as Record<string, Player>; }
 function activePlayers(players: Record<string, Player>, now = Date.now()): Record<string, Player> { return Object.fromEntries(Object.entries(players).filter(([, player]) => now - (player.activeAt ?? player.joinedAt ?? 0) <= PLAYER_STALE_MS)); }
 function cleanupGameRoot(root: DatabaseRoot, gameId: string): DatabaseRoot { const games = { ...(root.games ?? {}) }; const relayPages = { ...(root.relayPages ?? {}) }; delete games[gameId]; delete relayPages[gameId]; return { ...root, games, relayPages }; }
+function destroyRoomRoot(root: DatabaseRoot, roomId: string, room: RoomState): DatabaseRoot { const gameId = typeof room.currentGameId === "string" ? room.currentGameId : null; const cleaned = gameId ? cleanupGameRoot(root, gameId) : root; const rooms = { ...(cleaned.rooms ?? {}) }; delete rooms[roomId]; return { ...cleaned, rooms }; }
 
 export function watchRoom(roomId: string, callback: (room: RoomState | null) => void, onError?: WatchErrorCallback): Unsubscribe { return onValue(roomRef(roomId), (snapshot) => callback(snapshot.val() as RoomState | null), (error) => onError?.(error)); }
 export function watchGame(gameId: string, callback: (game: GameState | null) => void, onError?: WatchErrorCallback): Unsubscribe { return onValue(gameRef(gameId), (snapshot) => callback(snapshot.val() as GameState | null), (error) => onError?.(error)); }
@@ -30,22 +31,12 @@ export async function upsertPlayer(roomId: string, player: Player): Promise<void
 
     const originalPlayers = normalizePlayers(current.players);
     const active = activePlayers(originalPlayers, now);
-    const currentGameId = typeof current.currentGameId === "string" ? current.currentGameId : null;
-    const lobby = current.lobby ?? createDefaultLobbyConfig();
-    const existingSelf = originalPlayers[player.id];
-    const otherActivePlayers = Object.entries(active).filter(([id]) => id !== player.id);
-    const onlyPreviousSelfWasInRoom = Boolean(currentGameId && existingSelf && otherActivePlayers.length === 0);
-    const noActivePlayers = currentGameId && Object.keys(active).length === 0;
-
-    // A room with an unfinished game must never resurrect a solo session after reload/restart.
-    // If the only recorded player is the same player rejoining, the old game is abandoned.
-    if (currentGameId && (noActivePlayers || onlyPreviousSelfWasInRoom)) {
-      const cleaned = cleanupGameRoot(root, currentGameId);
-      return { ...cleaned, rooms: { ...(cleaned.rooms ?? {}), [roomId]: { ...current, players: { [player.id]: { ...player, activeAt: now } }, currentGameId: null, lobby, createdAt: current.createdAt ?? now } } } satisfies DatabaseRoot;
+    if (Object.keys(active).length === 0) {
+      const destroyed = destroyRoomRoot(root, roomId, current);
+      return { ...destroyed, rooms: { ...(destroyed.rooms ?? {}), [roomId]: { players: { [player.id]: { ...player, activeAt: now } }, currentGameId: null, lobby: createDefaultLobbyConfig(), createdAt: now } } } satisfies DatabaseRoot;
     }
 
-    const existing = active[player.id];
-    return { ...root, rooms: { ...(root.rooms ?? {}), [roomId]: { ...current, players: { ...active, [player.id]: { ...existing, ...player, joinedAt: existing?.joinedAt ?? player.joinedAt, activeAt: now } }, currentGameId, lobby, createdAt: current.createdAt ?? now } } } satisfies DatabaseRoot;
+    return { ...root, rooms: { ...(root.rooms ?? {}), [roomId]: { ...current, players: { ...active, [player.id]: { ...active[player.id], ...player, joinedAt: active[player.id]?.joinedAt ?? player.joinedAt, activeAt: now } }, currentGameId: typeof current.currentGameId === "string" ? current.currentGameId : null, lobby: current.lobby ?? createDefaultLobbyConfig(), createdAt: current.createdAt ?? now } } } satisfies DatabaseRoot;
   }, { applyLocally: false });
 }
 
@@ -55,12 +46,8 @@ export async function touchPlayer(roomId: string, playerId: string): Promise<voi
 export async function leaveRoom(roomId: string, playerId: string): Promise<boolean> {
   const result = await runTransaction(ref(db), (raw: unknown) => {
     const root = (raw ?? {}) as DatabaseRoot; const current = root.rooms?.[roomId] ?? null; if (!current) return;
-    const players = activePlayers(normalizePlayers(current.players)); const nextPlayers = { ...players }; delete nextPlayers[playerId];
-    if (Object.keys(nextPlayers).length === 0) {
-      const gameId = typeof current.currentGameId === "string" ? current.currentGameId : null;
-      const cleaned = gameId ? cleanupGameRoot(root, gameId) : root; const rooms = { ...(cleaned.rooms ?? {}) }; delete rooms[roomId];
-      return { ...cleaned, rooms } satisfies DatabaseRoot;
-    }
+    const nextPlayers = activePlayers(normalizePlayers(current.players)); delete nextPlayers[playerId];
+    if (Object.keys(nextPlayers).length === 0) return destroyRoomRoot(root, roomId, current);
     return { ...root, rooms: { ...(root.rooms ?? {}), [roomId]: { ...current, players: nextPlayers, currentGameId: typeof current.currentGameId === "string" ? current.currentGameId : null, lobby: current.lobby ?? createDefaultLobbyConfig() } } } satisfies DatabaseRoot;
   }, { applyLocally: false });
   return result.committed;
