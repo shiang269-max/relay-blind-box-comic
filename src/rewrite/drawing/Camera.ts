@@ -11,8 +11,8 @@ export interface Size {
 /**
  * 唯一 Camera：背景、上一頁內容與本回合筆劃共用同一世界座標。
  *
- * 標準模式預設進入「局部作畫視角」，而不是一開始把整張世界縮到最小。
- * 使用者仍可縮小查看全局，並自由拖曳／放大。
+ * 標準模式預設直接進入最大作畫視角，讓玩家一開始就感受到世界畫布的尺度；
+ * 仍可透過移動畫布模式縮小查看全局。
  */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
@@ -35,23 +35,14 @@ export class Camera {
   get viewportHeight(): number { return this.viewport.height; }
 
   setViewport(width: number, height: number): void {
-    const nextViewport = {
-      width: Math.max(1, width),
-      height: Math.max(1, height),
-    };
-
+    const nextViewport = { width: Math.max(1, width), height: Math.max(1, height) };
     if (!this.initialized) {
       this.viewport = nextViewport;
       this.initialized = true;
       this.reset();
       return;
     }
-
-    const oldCenter = this.screenToWorld({
-      x: this.viewport.width / 2,
-      y: this.viewport.height / 2,
-    });
-
+    const oldCenter = this.screenToWorld({ x: this.viewport.width / 2, y: this.viewport.height / 2 });
     this.viewport = nextViewport;
     this._zoom = this.clampZoom(this._zoom);
     this.position = {
@@ -67,9 +58,9 @@ export class Camera {
     this.centerOn({ x: this.world.width / 2, y: this.world.height / 2 });
   }
 
-  /** 初始／重設：回到適合作畫的局部視角。 */
+  /** 初始／重設：直接進入最大作畫視角。 */
   reset(): void {
-    this._zoom = this.initialZoom();
+    this._zoom = this.maximumZoom;
     this.centerOn({ x: this.world.width / 2, y: this.world.height / 2 });
   }
 
@@ -87,60 +78,37 @@ export class Camera {
 
   panByScreen(dx: number, dy: number): void {
     if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
-    this.setPosition(
-      this.position.x - dx / this._zoom,
-      this.position.y - dy / this._zoom
-    );
+    this.setPosition(this.position.x - dx / this._zoom, this.position.y - dy / this._zoom);
   }
 
   zoomAt(screen: Point, factor: number): void {
-    if (
-      !Number.isFinite(screen.x) ||
-      !Number.isFinite(screen.y) ||
-      !Number.isFinite(factor) ||
-      factor <= 0
-    ) return;
-
+    if (!Number.isFinite(screen.x) || !Number.isFinite(screen.y) || !Number.isFinite(factor) || factor <= 0) return;
     const anchor = this.screenToWorld(screen);
     const nextZoom = this.clampZoom(this._zoom * factor);
     if (Math.abs(nextZoom - this._zoom) < 1e-9) return;
-
     this._zoom = nextZoom;
-    this.position = {
-      x: anchor.x - screen.x / this._zoom,
-      y: anchor.y - screen.y / this._zoom,
-    };
+    this.position = { x: anchor.x - screen.x / this._zoom, y: anchor.y - screen.y / this._zoom };
     this.clamp();
   }
 
-  /** 點擊概覽中的區域後，直接將該區域帶回作畫視角中央。 */
+  /** 點擊概覽中的區域後，直接將該區域帶回最大作畫視角中央。 */
   focusAtScreen(screen: Point): void {
     if (!Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return;
     const target = this.screenToWorld(screen);
-    this._zoom = this.initialZoom();
+    this._zoom = this.maximumZoom;
     this.centerOn(target);
   }
 
   screenToWorld(point: Point): Point {
-    return {
-      x: point.x / this._zoom + this.position.x,
-      y: point.y / this._zoom + this.position.y,
-    };
+    return { x: point.x / this._zoom + this.position.x, y: point.y / this._zoom + this.position.y };
   }
 
   worldToScreen(point: Point): Point {
-    return {
-      x: (point.x - this.position.x) * this._zoom,
-      y: (point.y - this.position.y) * this._zoom,
-    };
+    return { x: (point.x - this.position.x) * this._zoom, y: (point.y - this.position.y) * this._zoom };
   }
 
   isInsideWorld(point: Point): boolean {
     return point.x >= 0 && point.y >= 0 && point.x <= this.world.width && point.y <= this.world.height;
-  }
-
-  private initialZoom(): number {
-    return this.clampZoom(Math.max(this.preferredZoom, this.fitZoom()));
   }
 
   private centerOn(point: Point): void {
@@ -152,10 +120,7 @@ export class Camera {
   }
 
   private fitZoom(): number {
-    return Math.min(
-      this.viewport.width / this.world.width,
-      this.viewport.height / this.world.height
-    );
+    return Math.min(this.viewport.width / this.world.width, this.viewport.height / this.world.height);
   }
 
   private clampZoom(zoom: number): number {
@@ -167,19 +132,9 @@ export class Camera {
   private clamp(): void {
     const visibleWidth = this.viewport.width / this._zoom;
     const visibleHeight = this.viewport.height / this._zoom;
-
-    if (visibleWidth >= this.world.width) {
-      this.position.x = (this.world.width - visibleWidth) / 2;
-    } else {
-      const maxX = Math.max(0, this.world.width - visibleWidth);
-      this.position.x = Math.max(0, Math.min(this.position.x, maxX));
-    }
-
-    if (visibleHeight >= this.world.height) {
-      this.position.y = (this.world.height - visibleHeight) / 2;
-    } else {
-      const maxY = Math.max(0, this.world.height - visibleHeight);
-      this.position.y = Math.max(0, Math.min(this.position.y, maxY));
-    }
+    if (visibleWidth >= this.world.width) this.position.x = (this.world.width - visibleWidth) / 2;
+    else this.position.x = Math.max(0, Math.min(this.position.x, Math.max(0, this.world.width - visibleWidth)));
+    if (visibleHeight >= this.world.height) this.position.y = (this.world.height - visibleHeight) / 2;
+    else this.position.y = Math.max(0, Math.min(this.position.y, Math.max(0, this.world.height - visibleHeight)));
   }
 }
