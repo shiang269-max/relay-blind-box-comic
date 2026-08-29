@@ -15,10 +15,10 @@ function readPlayerName(): string { return localStorage.getItem(PLAYER_NAME_KEY)
 
 function AppRewrite() {
   const [roomTarget, setRoomTarget] = useState<RoomTarget>(() => ({ id: generateRoomId(), createIfMissing: true }));
-  const [connected, setConnected] = useState(false);
-  const { id: roomId, createIfMissing } = roomTarget;
   const [playerId] = useState(readPlayerId);
   const [playerName, setPlayerName] = useState(readPlayerName);
+  const [connected, setConnected] = useState(() => Boolean(readPlayerName()));
+  const { id: roomId, createIfMissing } = roomTarget;
   const [screen, setScreen] = useState<"lobby" | "history">("lobby");
   const [viewingComic, setViewingComic] = useState<Comic | null>(null);
   const [viewportHeight, setViewportHeight] = useState(getSafeViewportHeight);
@@ -28,7 +28,7 @@ function AppRewrite() {
   useEffect(() => () => { if (connected) void leave().catch(() => {}); }, [connected, leave]);
   useEffect(() => { if (window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search); }, []);
 
-  const saveName = useCallback(async (name: string) => { const next = name.trim().slice(0, 12); if (!next) return; localStorage.setItem(PLAYER_NAME_KEY, next); setPlayerName(next); }, []);
+  const saveName = useCallback(async (name: string) => { const next = name.trim().slice(0, 12); if (!next) return; localStorage.setItem(PLAYER_NAME_KEY, next); setPlayerName(next); setConnected(true); }, []);
   const joinRoom = useCallback((nextRoom: string) => { const normalized = nextRoom.trim().toUpperCase(); if (!normalized) return; setRoomTarget({ id: normalized, createIfMissing: true }); setScreen("lobby"); setConnected(true); }, []);
   const createNewRoom = useCallback(() => { setRoomTarget({ id: generateRoomId(), createIfMissing: true }); setScreen("lobby"); setConnected(true); }, []);
   const returnToHome = useCallback(() => { setConnected(false); setScreen("lobby"); setRoomTarget({ id: generateRoomId(), createIfMissing: true }); window.history.replaceState(null, "", window.location.pathname + window.location.search); }, []);
@@ -39,9 +39,7 @@ function AppRewrite() {
   if (!connected) return <LobbyPage roomId={roomId} playerName={playerName} players={[]} isHost={true} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
   if (loading) return <div style={{ minHeight: Math.max(viewportHeight, 320), width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", background: "#020617", color: "#ffffff", fontSize: 18 }}>正在連線至遊戲房間…</div>;
   if (error) return <div style={{ minHeight: Math.max(viewportHeight, 320), width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "#020617", color: "#ffffff", fontSize: 16, textAlign: "center" }}>{error}</div>;
-
   if (room && game && (game.phase === "playing" || game.phase === "review")) return <GameRouter room={room} game={game} players={players} submit={submit} roomId={roomId} playerId={playerId} playerName={playerName} onLeaveGame={handleLeaveGame} />;
-
   return <LobbyPage roomId={roomId} playerName={playerName} players={room ? players : []} isHost={room ? isHost : true} roomMissing={false} onSaveName={saveName} onJoinRoom={joinRoom} onCreateRoom={createNewRoom} onStart={start} onHistory={() => setScreen("history")} />;
 }
 export default AppRewrite;
