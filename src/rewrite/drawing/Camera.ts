@@ -10,9 +10,6 @@ export interface Size {
 
 /**
  * 唯一 Camera：背景、上一頁內容與本回合筆劃共用同一世界座標。
- *
- * 標準模式預設直接進入最大作畫視角，讓玩家一開始就感受到世界畫布的尺度；
- * 仍可透過移動畫布模式縮小查看全局。
  */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
@@ -51,13 +48,11 @@ export class Camera {
     this.clamp();
   }
 
-  /** 最小縮放：完整世界概覽。 */
   fitToWorld(): void {
     this._zoom = this.fitZoom();
     this.centerOn({ x: this.world.width / 2, y: this.world.height / 2 });
   }
 
-  /** 初始／重設：直接進入最大作畫視角。 */
   reset(): void {
     this._zoom = this.maximumZoom;
     this.centerOn({ x: this.world.width / 2, y: this.world.height / 2 });
@@ -88,14 +83,6 @@ export class Camera {
     this._zoom = nextZoom;
     this.position = { x: anchor.x - screen.x / this._zoom, y: anchor.y - screen.y / this._zoom };
     this.clamp();
-  }
-
-  /** 點擊概覽中的區域後，直接將該區域帶回最大作畫視角中央。 */
-  focusAtScreen(screen: Point): void {
-    if (!Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return;
-    const target = this.screenToWorld(screen);
-    this._zoom = this.maximumZoom;
-    this.centerOn(target);
   }
 
   screenToWorld(point: Point): Point {
