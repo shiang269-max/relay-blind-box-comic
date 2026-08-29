@@ -30,10 +30,16 @@ export default function GameRouter({
   onLeaveGame,
 }: GameRouterProps) {
   const [relayPages, setRelayPages] = useState<Record<string, string>>({});
+  const [relayPagesLoaded, setRelayPagesLoaded] = useState(false);
 
   useEffect(() => {
     setRelayPages({});
-    return watchRelayPages(roomId, setRelayPages);
+    setRelayPagesLoaded(false);
+
+    return watchRelayPages(roomId, (nextPages) => {
+      setRelayPages(nextPages);
+      setRelayPagesLoaded(true);
+    });
   }, [roomId]);
 
   const legacyRelayPages = useMemo(() => {
@@ -75,7 +81,22 @@ export default function GameRouter({
         playerIds: players.map((player) => player.id),
       });
 
-      const previousPage = previousKey ? pages[previousKey] ?? null : null;
+      // 回合狀態與 relayPages 是兩條 Firebase 監聽路徑。
+      // currentTurn 可能先更新，relayPages 才稍後到達。此時不能先建立空白
+      // DrawingScreen，否則下一次 pages 到達時會重新初始化畫布，看起來就像作品被清掉。
+      if (previousKey && (!relayPagesLoaded || !pages[previousKey])) {
+        return (
+          <WaitingPage
+            round={game.currentTurn}
+            totalRounds={mode.totalRounds}
+            modeLabel={mode.label}
+            currentPlayerName="正在載入上一頁作品"
+            map={room.map}
+          />
+        );
+      }
+
+      const previousPage = previousKey ? pages[previousKey] : null;
 
       return (
         <DrawingScreen
@@ -86,7 +107,7 @@ export default function GameRouter({
           playerCount={Math.max(1, players.length)}
           map={room.map}
           playerName={playerName}
-          previousPage={previousPage}
+          previousPage={previousPage ?? null}
           onSubmit={submit}
         />
       );
@@ -109,6 +130,10 @@ export default function GameRouter({
       return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={room.map} />;
     }
 
+    if (!relayPagesLoaded && Object.keys(legacyRelayPages).length === 0) {
+      return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="正在載入漫畫成果" map={room.map} />;
+    }
+
     const comic: Comic = {
       id: roomId,
       title: "本局成果",
@@ -121,7 +146,7 @@ export default function GameRouter({
       <ReviewPage
         comic={comic}
         map={room.map}
-        totalPages={mode.totalRounds ?? Object.keys(pages).length}
+        totalPages={mode.totalRounds ?? 30}
         onBack={onLeaveGame}
         onSave={saveComic}
       />
