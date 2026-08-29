@@ -85,26 +85,17 @@ export async function startGame(roomId: string, playerId: string, map: MapType, 
       createdAt: rawRoom.createdAt ?? createdAt,
     };
     if (!canStartGame(room, playerId)) return;
-
     const participantIds = orderPlayers(room.players).map((item) => item.id);
     if (!participantIds.length) return;
 
     game = createGameState({
-      gameId,
-      roomId,
-      mode,
-      map,
-      participantIds,
+      gameId, roomId, mode, map, participantIds,
       currentPlayerId: participantIds[0] ?? null,
       createdAt,
       modeState: mode === "relay-30" ? createRelayModeState() : {},
     });
 
-    return {
-      ...room,
-      currentGameId: gameId,
-      lobby: { selectedMode: mode, selectedMap: map },
-    } satisfies RoomState;
+    return { ...room, currentGameId: gameId, lobby: { selectedMode: mode, selectedMap: map } } satisfies RoomState;
   }, { applyLocally: false });
 
   if (!roomResult.committed || !game) throw new Error("無法開始遊戲");
@@ -118,28 +109,49 @@ export async function startGame(roomId: string, playerId: string, map: MapType, 
     }, { applyLocally: false });
     throw error;
   }
-
   return gameId;
 }
 
-export async function closeCurrentGame(roomId: string, gameId: string): Promise<boolean> { const result = await runTransaction(roomRef(roomId), (current: RoomState | null) => current?.currentGameId === gameId ? { ...current, currentGameId: null } satisfies RoomState : undefined, { applyLocally: false }); return result.committed; }
+export async function closeCurrentGame(roomId: string, gameId: string): Promise<boolean> {
+  const result = await runTransaction(roomRef(roomId), (current: RoomState | null) => current?.currentGameId === gameId ? { ...current, currentGameId: null } satisfies RoomState : undefined, { applyLocally: false });
+  return result.committed;
+}
 
+/**
+ * 先把目前頁面寫入專屬 page path，再對單一 game 節點交易推進回合。
+ * 不再對 Firebase 根節點做交易，避免 RTDB 規則或大型資料根節點導致交易未提交。
+ */
 export async function submitRound(roomId: string, gameId: string, playerId: string, pageDataUrl: string): Promise<boolean> {
   if (!pageDataUrl.startsWith("data:image/")) throw new Error("送出作品格式無效");
   if (new TextEncoder().encode(pageDataUrl).byteLength > MAX_RELAY_PAGE_BYTES) throw new Error("作品快照過大，請稍後重新整理後再送出");
-  const result = await runTransaction(ref(db), (root: unknown) => {
-    const currentRoot = (root ?? {}) as { rooms?: Record<string, RoomState | undefined>; games?: Record<string, GameState | undefined>; relayPages?: Record<string, Record<string, string> | undefined> };
-    const room = currentRoot.rooms?.[roomId] ?? null;
-    const game = currentRoot.games?.[gameId] ?? null;
-    if (!room || room.currentGameId !== gameId || !game || game.roomId !== roomId || !canSubmitRound(game, playerId)) return;
-    const pageKey = String(game.currentTurn); if (game.currentTurn < 1) return;
-    const gamePages = currentRoot.relayPages?.[gameId] ?? {}; if (gamePages[pageKey]) return;
-    const nextGame = nextRoundState(game); if (!nextGame) return;
-    return { ...currentRoot, games: { ...(currentRoot.games ?? {}), [gameId]: nextGame }, relayPages: { ...(currentRoot.relayPages ?? {}), [gameId]: { ...gamePages, [pageKey]: pageDataUrl } } };
-  }, { applyLocally: false }); return result.committed;
+
+  let pageKey: string | null = null;
+  let accepted = false;
+
+  const result = await runTransaction(gameRef(gameId), (game: GameState | null) => {
+    if (!game || game.roomId !== roomId || !canSubmitRound(game, playerId)) return;
+    if (game.currentTurn < 1) return;
+    pageKey = String(game.currentTurn);
+    const nextGame = nextRoundState(game);
+    if (!nextGame) return;
+    accepted = true;
+    return nextGame;
+  }, { applyLocally: false });
+
+  if (!result.committed || !accepted || !pageKey) return false;
+
+  try {
+    await set(ref(db, `relayPages/${gameId}/${pageKey}`), pageDataUrl);
+    return true;
+  } catch (error) {
+    throw new Error(error instanceof Error ? `作品已推進但頁面保存失敗：${error.message}` : "作品已推進但頁面保存失敗");
+  }
 }
 
-export async function requestPageClearVote(gameId: string, playerId: string): Promise<boolean> { const result = await runTransaction(gameRef(gameId), (current: GameState | null) => current ? requestClearVote(current, playerId) ?? undefined : undefined, { applyLocally: false }); return result.committed; }
+export async function requestPageClearVote(gameId: string, playerId: string): Promise<boolean> {
+  const result = await runTransaction(gameRef(gameId), (current: GameState | null) => current ? requestClearVote(current, playerId) ?? undefined : undefined, { applyLocally: false });
+  return result.committed;
+}
 export async function voteToClearPage(gameId: string, playerId: string): Promise<boolean> {
   const result = await runTransaction(ref(db), (root: unknown) => {
     const currentRoot = (root ?? {}) as { games?: Record<string, GameState | undefined>; relayPages?: Record<string, Record<string, string> | undefined> };
@@ -148,8 +160,12 @@ export async function voteToClearPage(gameId: string, playerId: string): Promise
     if (!hasClearVotePassed(voted)) return { ...currentRoot, games: { ...(currentRoot.games ?? {}), [gameId]: voted } };
     const nextPages = { ...(currentRoot.relayPages?.[gameId] ?? {}) }; delete nextPages[String(voted.clearVote?.pageIndex ?? Math.max(0, game.currentTurn - 1))];
     return { ...currentRoot, games: { ...(currentRoot.games ?? {}), [gameId]: { ...voted, clearVote: null } }, relayPages: { ...(currentRoot.relayPages ?? {}), [gameId]: nextPages } };
-  }, { applyLocally: false }); return result.committed;
+  }, { applyLocally: false });
+  return result.committed;
 }
-export async function cancelPageClearVote(gameId: string, playerId: string): Promise<boolean> { const result = await runTransaction(gameRef(gameId), (current: GameState | null) => current ? cancelClearVote(current, playerId) ?? undefined : undefined, { applyLocally: false }); return result.committed; }
+export async function cancelPageClearVote(gameId: string, playerId: string): Promise<boolean> {
+  const result = await runTransaction(gameRef(gameId), (current: GameState | null) => current ? cancelClearVote(current, playerId) ?? undefined : undefined, { applyLocally: false });
+  return result.committed;
+}
 export function getOrderedPlayers(room: RoomState | null): Player[] { return orderPlayers(normalizePlayers(room?.players)); }
 export function isRoomHost(room: RoomState | null, playerId: string): boolean { return getHostId(room ? { ...room, players: normalizePlayers(room.players) } : null) === playerId; }
