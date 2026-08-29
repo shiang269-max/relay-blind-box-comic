@@ -52,18 +52,20 @@ function AppRewrite() {
   const joinRoom = useCallback((nextRoom: string) => {
     const normalized = nextRoom.trim().toUpperCase();
     if (!normalized) return;
+    setConnected(false);
     setRoomTarget({ id: normalized, createIfMissing: false });
-    setScreen("lobby");
-    setConnected(true);
+    setScreen("game");
     window.location.hash = normalized;
+    window.setTimeout(() => setConnected(true), 0);
   }, []);
 
   const createNewRoom = useCallback(() => {
     const next = generateRoomId();
+    setConnected(false);
     setRoomTarget({ id: next, createIfMissing: true });
     setScreen("lobby");
-    setConnected(true);
     window.location.hash = next;
+    window.setTimeout(() => setConnected(true), 0);
   }, []);
 
   const returnToHome = useCallback(() => {
@@ -74,13 +76,15 @@ function AppRewrite() {
   }, []);
 
   const handleLeaveGame = useCallback(async () => {
-    returnToHome();
+    setConnected(false);
+    setScreen("lobby");
+    setRoomTarget({ id: generateRoomId(), createIfMissing: true });
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
     void leave().catch(() => {});
-  }, [leave, returnToHome]);
+  }, [leave]);
 
   const handleRestart = useCallback(async () => {
-    await restart();
-    returnToHome();
+    try { await restart(); } finally { returnToHome(); }
   }, [restart, returnToHome]);
 
   if (viewingComic) return <ReviewPage comic={viewingComic} map={viewingComic.map ?? "earth"} onBack={() => setViewingComic(null)} readOnly />;
