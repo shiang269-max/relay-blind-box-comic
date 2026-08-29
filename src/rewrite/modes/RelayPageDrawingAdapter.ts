@@ -4,6 +4,7 @@ import type { Stroke } from "../drawing/Stroke";
 
 export interface RelayPageDrawingAdapterOptions {
   roomId: string;
+  gameId: string;
   pageIndex: number;
   persistence: DrawingPersistence;
 }
@@ -13,10 +14,11 @@ export class RelayPageDrawingAdapter {
 
   constructor(private readonly options: RelayPageDrawingAdapterOptions) {
     if (!options.roomId) throw new Error("roomId 不可為空");
+    if (!options.gameId) throw new Error("gameId 不可為空");
     if (!Number.isInteger(options.pageIndex) || options.pageIndex < 0) {
       throw new Error("pageIndex 必須是非負整數");
     }
-    this.scope = `relay:${options.roomId}:page:${options.pageIndex}`;
+    this.scope = `relay:${options.roomId}:game:${options.gameId}:page:${options.pageIndex}`;
   }
 
   async load(): Promise<Stroke[]> {
