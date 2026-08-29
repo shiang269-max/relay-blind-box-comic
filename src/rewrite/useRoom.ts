@@ -16,6 +16,7 @@ import {
 } from "./data/RoomRepository";
 
 const DISCONNECT_GRACE_MS = 10_000;
+const ROOM_LOAD_TIMEOUT_MS = 8_000;
 
 export interface RoomSession {
   roomId: string;
@@ -28,14 +29,43 @@ export function useRoom(session: RoomSession) {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
+    setError(null);
     setGame(null);
-    return watchRoom(session.roomId, (nextRoom) => {
-      setRoom(nextRoom);
+
+    const timeoutId = window.setTimeout(() => {
+      if (!active) return;
       setLoading(false);
-    });
+      setError("Firebase 連線逾時，請確認網路與 Realtime Database 規則。");
+    }, ROOM_LOAD_TIMEOUT_MS);
+
+    const unsubscribe = watchRoom(
+      session.roomId,
+      (nextRoom) => {
+        if (!active) return;
+        window.clearTimeout(timeoutId);
+        setRoom(nextRoom);
+        setError(null);
+        setLoading(false);
+      },
+      (nextError) => {
+        if (!active) return;
+        window.clearTimeout(timeoutId);
+        setRoom(null);
+        setLoading(false);
+        setError(nextError.message || "無法讀取 Firebase 房間資料。");
+      }
+    );
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+      unsubscribe();
+    };
   }, [session.roomId]);
 
   useEffect(() => {
@@ -49,7 +79,7 @@ export function useRoom(session: RoomSession) {
   }, [room?.currentGameId]);
 
   useEffect(() => {
-    if (!session.playerName || loading) return;
+    if (!session.playerName || loading || error) return;
     if (!room && !session.createIfMissing) return;
 
     const player: Player = {
@@ -57,9 +87,14 @@ export function useRoom(session: RoomSession) {
       name: session.playerName,
       joinedAt: Date.now(),
     };
-    void upsertPlayer(session.roomId, player);
-    void startPlayerPresence(session.roomId, session.playerId);
-  }, [loading, room, session.createIfMissing, session.playerId, session.playerName, session.roomId]);
+
+    void upsertPlayer(session.roomId, player).catch((nextError: unknown) => {
+      setError(nextError instanceof Error ? nextError.message : "無法寫入 Firebase 房間資料。");
+    });
+    void startPlayerPresence(session.roomId, session.playerId).catch(() => {
+      // Presence 失敗不阻塞本地 Lobby，但房間資料仍會由主交易流程處理。
+    });
+  }, [error, loading, room, session.createIfMissing, session.playerId, session.playerName, session.roomId]);
 
   useEffect(() => {
     if (!room || !game || game.phase !== "playing") return;
@@ -98,5 +133,5 @@ export function useRoom(session: RoomSession) {
     await leaveRoom(session.roomId, session.playerId);
   }, [session.playerId, session.roomId]);
 
-  return { room, game, loading, players, isHost, start, submit, restart, leave };
+  return { room, game, loading, error, players, isHost, start, submit, restart, leave };
 }
