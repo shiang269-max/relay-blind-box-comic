@@ -119,7 +119,10 @@ export function useRoom(session: RoomSession) {
 
   useEffect(() => {
     if (!room || !game || game.phase !== "playing") return;
-    const currentPlayerExists = Boolean(game.currentPlayerId && room.players[game.currentPlayerId]);
+    const currentPlayerId = game.currentPlayerId;
+    const currentPlayerExists = Boolean(
+      currentPlayerId && room.players?.[currentPlayerId]
+    );
     if (currentPlayerExists) return;
 
     const timeoutId = window.setTimeout(() => {
