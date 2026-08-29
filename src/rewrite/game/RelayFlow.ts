@@ -6,14 +6,8 @@ import type {
 } from "./GameFlow";
 
 /**
- * 接力盲盒漫畫流程。
- *
- * 30 頁模式以「每位玩家各完成一次」作為一輪：
- * - round 代表第幾個玩家回合
- * - 先完成所有玩家的一輪，才進入下一個時間段
- * - 第 30 頁完成後進入成果回顧
- *
- * 共用繪圖引擎與未來世界模式不依賴這些規則。
+ * 接力盲盒漫畫固定流程。
+ * participantIds 由本局開始時凍結，RelayFlow 不負責處理玩家缺席。
  */
 export class RelayFlow implements GameFlow {
   constructor(
@@ -53,9 +47,21 @@ export class RelayFlow implements GameFlow {
       };
     }
 
-    const currentIndex = context.currentPlayerId
-      ? Math.max(0, playerIds.indexOf(context.currentPlayerId))
-      : -1;
+    if (context.currentPlayerId === null) {
+      return {
+        phase: "playing",
+        currentRound: nextRound,
+        currentPlayerId: playerIds[0],
+      };
+    }
+
+    const currentIndex = playerIds.indexOf(context.currentPlayerId);
+
+    if (currentIndex < 0) {
+      throw new Error(
+        "currentPlayerId 不存在於固定 participantIds"
+      );
+    }
 
     return {
       phase: "playing",
