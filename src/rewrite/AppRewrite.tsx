@@ -33,7 +33,7 @@ function AppRewrite() {
   const [viewingComic, setViewingComic] = useState<Comic | null>(null);
   const [viewportHeight, setViewportHeight] = useState(getSafeViewportHeight);
 
-  const { room, game, players, isHost, loading, start, submit, restart } = useRoom({
+  const { room, game, players, isHost, loading, error, start, submit, restart } = useRoom({
     roomId, playerId, playerName, createIfMissing,
   });
 
@@ -92,7 +92,19 @@ function AppRewrite() {
   }, [restart]);
 
   if (loading) {
-    return <div className="flex items-center justify-center bg-slate-950 text-white" style={{ minHeight: viewportHeight }}>載入房間中...</div>;
+    return (
+      <div style={{ minHeight: Math.max(viewportHeight, 320), width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", background: "#020617", color: "#ffffff", fontSize: 18 }}>
+        正在連線至遊戲房間…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ minHeight: Math.max(viewportHeight, 320), width: "100vw", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: "#020617", color: "#ffffff", fontSize: 16, textAlign: "center" }}>
+        {error}
+      </div>
+    );
   }
 
   if (viewingComic) {
