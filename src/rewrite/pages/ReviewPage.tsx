@@ -25,24 +25,34 @@ export default function ReviewPage({
     }
     return Object.keys(comic.pages).map(Number).sort((a, b) => a - b);
   }, [comic.pages, totalPages]);
+
   const [index, setIndex] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [title, setTitle] = useState(comic.title);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [title, setTitle] = useState("");
+
   const page = pageNumbers[index] ?? index + 1;
   const round = page;
   const pageImage = comic.pages[String(page)] ?? null;
 
   const save = async () => {
-    if (!onSave || saving) return;
+    if (!onSave || saving || saved) return;
+
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) {
+      setSaveError("請先為這部漫畫命名。");
+      return;
+    }
 
     setSaving(true);
     setSaveError(null);
 
     try {
-      await onSave(title);
+      await onSave(normalizedTitle);
       setSaved(true);
+      setSaveDialogOpen(false);
     } catch (reason) {
       console.error("保存漫畫失敗", reason);
       setSaveError("保存失敗，請確認網路後再試一次。");
@@ -51,13 +61,8 @@ export default function ReviewPage({
     }
   };
 
-  const previous = () => {
-    setIndex((value) => Math.max(0, value - 1));
-  };
-
-  const next = () => {
-    setIndex((value) => Math.min(pageNumbers.length - 1, value + 1));
-  };
+  const previous = () => setIndex((value) => Math.max(0, value - 1));
+  const next = () => setIndex((value) => Math.min(pageNumbers.length - 1, value + 1));
 
   return (
     <div className="relative flex min-h-[100svh] flex-col overflow-hidden text-white">
@@ -75,27 +80,21 @@ export default function ReviewPage({
         </div>
         {!readOnly ? (
           <button
-            onClick={save}
+            onClick={() => {
+              setSaveError(null);
+              setSaveDialogOpen(true);
+            }}
             disabled={saving || saved}
             className="min-h-11 rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-bold transition active:scale-[0.98] disabled:opacity-50 sm:hover:bg-white/20"
           >
-            {saving ? "保存中" : saved ? "已保存" : "保存"}
+            {saved ? "已保存" : "保存"}
           </button>
         ) : <div className="w-[76px]" />}
       </header>
 
-      {!readOnly && (
-        <div className="relative z-10 border-b border-white/10 bg-slate-950/35 p-3 backdrop-blur-md">
-          <input
-            value={title}
-            disabled={saved}
-            onChange={(event) => setTitle(event.target.value)}
-            maxLength={30}
-            className="min-h-12 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/25 disabled:opacity-60"
-            placeholder="為這部漫畫命名"
-          />
-          {saved && <p className="mt-2 text-center text-xs text-emerald-200/80">這場接力已經正式封存到漫畫檔案庫。</p>}
-          {saveError && <p className="mt-2 text-center text-xs text-red-200">保存失敗，請確認網路後再試一次。</p>}
+      {saved && !readOnly && (
+        <div className="relative z-10 border-b border-emerald-300/15 bg-emerald-950/25 px-3 py-2 text-center text-xs text-emerald-100/85 backdrop-blur-md">
+          《{title.trim()}》已保存到漫畫檔案庫。
         </div>
       )}
 
@@ -137,6 +136,41 @@ export default function ReviewPage({
           下一頁
         </button>
       </footer>
+
+      {!readOnly && saveDialogOpen && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+            className="w-full max-w-md rounded-[2rem] border border-white/15 bg-slate-950/90 p-5 shadow-2xl"
+          >
+            <div className="text-lg font-black">為作品命名</div>
+            <p className="mt-2 text-sm text-white/55">保存後，這個名稱會顯示在漫畫檔案庫中。</p>
+            <input
+              autoFocus
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                if (saveError) setSaveError(null);
+              }}
+              maxLength={30}
+              placeholder="輸入漫畫名稱"
+              className="mt-4 min-h-12 w-full rounded-2xl border border-white/15 bg-black/30 px-4 text-base outline-none placeholder:text-white/25 focus:border-white/35"
+            />
+            {saveError && <p className="mt-2 text-xs text-red-200">{saveError}</p>}
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setSaveDialogOpen(false)} disabled={saving} className="min-h-12 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold disabled:opacity-50">
+                取消
+              </button>
+              <button type="submit" disabled={saving} className="min-h-12 rounded-2xl bg-emerald-400 px-4 text-sm font-black text-slate-950 disabled:opacity-50">
+                {saving ? "保存中..." : "確認保存"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
