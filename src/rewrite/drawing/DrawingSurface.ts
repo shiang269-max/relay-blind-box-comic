@@ -15,6 +15,9 @@ export interface SurfaceOptions {
   time: TimeOfDay;
 }
 
+const EXPORT_MAX_WIDTH = 1200;
+const EXPORT_MAX_HEIGHT = 2000;
+
 /**
  * 唯一負責畫布座標、世界像素與渲染的 Surface。
  *
@@ -155,18 +158,30 @@ export class DrawingSurface {
 
   /**
    * 接力圖片只保存漫畫內容，背景由目前世界即時渲染。
-   * 這避免上一頁把舊時間的背景烘焙進圖片，造成換時段後出現色塊或看似被清除。
+   *
+   * 正式世界仍以 3000×5000 繪製，但跨回合快照會縮成手機實際顯示足夠的
+   * 1200×2000 PNG，避免每回合把 1500 萬像素原圖直接塞進 Realtime Database。
+   * 載入時會再等比例鋪回世界座標，因此接力內容位置不變。
    */
   exportPng(): string {
     this.endStroke();
+
+    const scale = Math.min(
+      1,
+      EXPORT_MAX_WIDTH / this.options.worldWidth,
+      EXPORT_MAX_HEIGHT / this.options.worldHeight
+    );
+    const width = Math.max(1, Math.round(this.options.worldWidth * scale));
+    const height = Math.max(1, Math.round(this.options.worldHeight * scale));
+
     const output = document.createElement("canvas");
-    output.width = this.options.worldWidth;
-    output.height = this.options.worldHeight;
+    output.width = width;
+    output.height = height;
     const ctx = output.getContext("2d");
     if (!ctx) throw new Error("無法建立輸出畫布");
-    ctx.clearRect(0, 0, output.width, output.height);
-    ctx.drawImage(this.baseCanvas, 0, 0);
-    ctx.drawImage(this.strokeCanvas, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(this.baseCanvas, 0, 0, width, height);
+    ctx.drawImage(this.strokeCanvas, 0, 0, width, height);
     return output.toDataURL("image/png");
   }
 
