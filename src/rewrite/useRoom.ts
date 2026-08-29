@@ -43,23 +43,13 @@ export function useRoom(session: RoomSession) {
       setError("Firebase 連線逾時，請確認網路與 Realtime Database 規則。");
     }, ROOM_LOAD_TIMEOUT_MS);
 
-    const unsubscribe = watchRoom(
-      session.roomId,
-      (nextRoom) => {
-        if (!active) return;
-        window.clearTimeout(timeoutId);
-        setRoom(nextRoom);
-        setError(null);
-        setLoading(false);
-      },
-      (nextError) => {
-        if (!active) return;
-        window.clearTimeout(timeoutId);
-        setRoom(null);
-        setLoading(false);
-        setError(nextError.message || "無法讀取 Firebase 房間資料。");
-      }
-    );
+    const unsubscribe = watchRoom(session.roomId, (nextRoom) => {
+      if (!active) return;
+      window.clearTimeout(timeoutId);
+      setRoom(nextRoom);
+      setError(null);
+      setLoading(false);
+    });
 
     return () => {
       active = false;
@@ -92,15 +82,13 @@ export function useRoom(session: RoomSession) {
       setError(nextError instanceof Error ? nextError.message : "無法寫入 Firebase 房間資料。");
     });
     void startPlayerPresence(session.roomId, session.playerId).catch(() => {
-      // Presence 失敗不阻塞本地 Lobby，但房間資料仍會由主交易流程處理。
+      // Presence 失敗不阻塞本地 Lobby。
     });
   }, [error, loading, room, session.createIfMissing, session.playerId, session.playerName, session.roomId]);
 
   useEffect(() => {
     if (!room || !game || game.phase !== "playing") return;
-    const currentPlayerExists = Boolean(
-      game.currentPlayerId && room.players[game.currentPlayerId]
-    );
+    const currentPlayerExists = Boolean(game.currentPlayerId && room.players[game.currentPlayerId]);
     if (currentPlayerExists) return;
 
     const timeoutId = window.setTimeout(() => {
