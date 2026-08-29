@@ -1,17 +1,13 @@
 /**
- * 30頁接力模式專屬小型狀態。
+ * 30頁接力模式專屬狀態。
  *
- * 大型頁面影像不再放入 GameState.modeState，
- * 正式資料儲存在 relayPages/{gameId}/{turn}。
+ * 大型頁面影像不再放入 GameState.modeState。
+ * 正式頁面資料統一存放於 relayPages/{gameId}/{turn}。
  */
-export interface RelayModeState {
-  pages: Record<string, never>;
-}
+export interface RelayModeState {}
 
 export function createRelayModeState(): RelayModeState {
-  return {
-    pages: {},
-  };
+  return {};
 }
 
 export function getRelayPreviousPageKey(
