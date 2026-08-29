@@ -50,7 +50,7 @@ export class DrawingSurface {
     if (!this.camera.isInsideWorld(point)) return false;
     this.lastPoint = point;
     this.drawDot(point, brush);
-    this.renderNow();
+    this.render();
     return true;
   }
   continueStroke(point: Point, brush: Brush): void {
@@ -58,7 +58,7 @@ export class DrawingSurface {
     const from = this.lastPoint;
     this.drawSegment(from, point, brush);
     this.lastPoint = point;
-    this.renderNow();
+    this.render();
   }
   endStroke(): void { this.lastPoint = null; }
   clear(): void { this.endStroke(); this.strokeContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight); this.renderNow(); }
