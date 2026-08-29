@@ -36,7 +36,7 @@ export default function GameRouter({ game, players, submit, roomId, playerId, pl
       if (modeId !== "relay-30") return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={game.map} />;
       const previousKey = flow.getPreviousDrawingKey({ currentRound: game.currentTurn, currentPlayerId: game.currentPlayerId, playerIds: game.participantIds });
       if (previousKey && (!relayPagesLoaded || !pages[previousKey])) return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="正在載入上一頁作品" map={game.map} />;
-      return <DrawingScreen mode={mode} roomId={roomId} pageIndex={Math.max(0, game.currentTurn - 1)} round={game.currentTurn} playerCount={Math.max(1, game.participantIds.length)} map={game.map} playerName={playerName} previousPage={previousKey ? pages[previousKey] ?? null : null} onSubmit={submit} onLeaveGame={leaveGame} />;
+      return <DrawingScreen key={`${game.gameId}:${game.currentTurn}:${game.currentPlayerId}`} mode={mode} roomId={roomId} gameId={game.gameId} pageIndex={Math.max(0, game.currentTurn - 1)} round={game.currentTurn} playerCount={Math.max(1, game.participantIds.length)} map={game.map} playerName={playerName} previousPage={previousKey ? pages[previousKey] ?? null : null} onSubmit={submit} onLeaveGame={leaveGame} />;
     }
     const currentPlayer = players.find((player) => player.id === game.currentPlayerId);
     return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName={currentPlayer?.name ?? "等待玩家重新連線"} map={game.map} />;
