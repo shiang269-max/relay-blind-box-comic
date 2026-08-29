@@ -1,13 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ref, runTransaction, set } from "firebase/database";
 import { db } from "../lib/firebase";
-import {
-  generateComicId,
-  type Comic,
-  type Player,
-  type RoomState,
-} from "./domain";
-import { watchRelayPages } from "./data/RoomRepository";
+import { generateComicId, type Comic, type Player, type RoomState } from "./domain";
+import { closeCurrentGame, watchRelayPages } from "./data/RoomRepository";
 import type { GameState } from "./game/GameState";
 import { getGameFlow } from "./game/getGameFlow";
 import { getGameMode } from "./game/GameMode";
@@ -50,7 +45,7 @@ export default function GameRouter({
   }, [game.gameId]);
 
   const pages = relayPages;
-  const modeId = game.mode ?? "relay-30";
+  const modeId = game.mode;
   const mode = getGameMode(modeId);
 
   const saveComic = useCallback(async (title: string) => {
@@ -59,11 +54,9 @@ export default function GameRouter({
     const gameSnapshot = await runTransaction(
       ref(db, `games/${game.gameId}`),
       (current: GameState | null) => {
-        if (!current) return;
-
-        if (current.savedComicId) {
-          return current;
-        }
+        if (!current || current.roomId !== roomId) return;
+        if (current.phase !== "review") return;
+        if (current.savedComicId) return current;
 
         return {
           ...current,
@@ -75,10 +68,7 @@ export default function GameRouter({
 
     const savedGame = gameSnapshot.snapshot.val() as GameState | null;
     const comicId = savedGame?.savedComicId;
-
-    if (!comicId) {
-      throw new Error("無法建立漫畫封存識別");
-    }
+    if (!comicId) throw new Error("無法建立漫畫封存識別");
 
     const nextComic: Comic = {
       id: comicId,
@@ -89,22 +79,19 @@ export default function GameRouter({
     };
 
     await set(ref(db, `comics/${comicId}`), nextComic);
-  }, [game.createdAt, game.gameId, game.map, modeId, pages]);
+  }, [game.createdAt, game.gameId, game.map, modeId, pages, roomId]);
+
+  const finishGame = useCallback(async () => {
+    await closeCurrentGame(roomId, game.gameId);
+    onLeaveGame();
+  }, [game.gameId, onLeaveGame, roomId]);
 
   if (game.phase === "playing") {
     const flow = getGameFlow(modeId);
 
     if (game.currentPlayerId === playerId) {
       if (modeId !== "relay-30") {
-        return (
-          <WaitingPage
-            round={game.currentTurn}
-            totalRounds={mode.totalRounds}
-            modeLabel={mode.label}
-            currentPlayerName="此模式尚未開放"
-            map={game.map}
-          />
-        );
+        return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={game.map} />;
       }
 
       const previousKey = flow.getPreviousDrawingKey({
@@ -114,20 +101,8 @@ export default function GameRouter({
       });
 
       if (previousKey && (!relayPagesLoaded || !pages[previousKey])) {
-        return (
-          <WaitingPage
-            round={game.currentTurn}
-            totalRounds={mode.totalRounds}
-            modeLabel={mode.label}
-            currentPlayerName="正在載入上一頁作品"
-            map={game.map}
-          />
-        );
+        return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="正在載入上一頁作品" map={game.map} />;
       }
-
-      const previousPage = previousKey
-        ? pages[previousKey]
-        : null;
 
       return (
         <DrawingScreen
@@ -138,56 +113,30 @@ export default function GameRouter({
           playerCount={Math.max(1, game.participantIds.length)}
           map={game.map}
           playerName={playerName}
-          previousPage={previousPage ?? null}
+          previousPage={previousKey ? pages[previousKey] ?? null : null}
           onSubmit={submit}
         />
       );
     }
 
-    const currentPlayer = players.find(
-      (player) => player.id === game.currentPlayerId
-    );
+    const currentPlayer = players.find((player) => player.id === game.currentPlayerId);
 
-    return (
-      <WaitingPage
-        round={game.currentTurn}
-        totalRounds={mode.totalRounds}
-        modeLabel={mode.label}
-        currentPlayerName={currentPlayer?.name ?? "等待玩家重新連線"}
-        map={game.map}
-      />
-    );
+    return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName={currentPlayer?.name ?? "等待玩家重新連線"} map={game.map} />;
   }
 
   if (game.phase === "review") {
     if (modeId !== "relay-30") {
-      return (
-        <WaitingPage
-          round={game.currentTurn}
-          totalRounds={mode.totalRounds}
-          modeLabel={mode.label}
-          currentPlayerName="此模式尚未開放"
-          map={game.map}
-        />
-      );
+      return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={game.map} />;
     }
 
     if (!relayPagesLoaded) {
-      return (
-        <WaitingPage
-          round={game.currentTurn}
-          totalRounds={mode.totalRounds}
-          modeLabel={mode.label}
-          currentPlayerName="正在載入漫畫成果"
-          map={game.map}
-        />
-      );
+      return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="正在載入漫畫成果" map={game.map} />;
     }
 
     const comic: Comic = {
       id: game.savedComicId ?? game.gameId,
       title: "本局成果",
-      createdAt: game.createdAt,
+      createdAt: game.completedAt ?? game.createdAt,
       map: game.map,
       pages,
     };
@@ -197,19 +146,11 @@ export default function GameRouter({
         comic={comic}
         map={game.map}
         totalPages={mode.totalRounds ?? 30}
-        onBack={onLeaveGame}
+        onBack={finishGame}
         onSave={saveComic}
       />
     );
   }
 
-  return (
-    <WaitingPage
-      round={game.currentTurn ?? 1}
-      totalRounds={mode.totalRounds}
-      modeLabel={mode.label}
-      currentPlayerName="等待遊戲狀態"
-      map={game.map}
-    />
-  );
+  return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="等待遊戲狀態" map={game.map} />;
 }
