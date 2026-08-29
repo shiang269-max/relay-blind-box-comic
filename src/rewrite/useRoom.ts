@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MapType, RoomState } from "./domain";
 import type { GameState } from "./game/GameState";
-import { getOrderedPlayers, isRoomHost, leaveRoom, recoverMissingCurrentPlayerTurn, startGame, startPlayerPresence, submitRound, touchPlayer, upsertPlayer, watchGame, watchRoom } from "./data/RoomRepository";
+import { getOrderedPlayers, isRoomHost, leaveRoom, startGame, startPlayerPresence, submitRound, touchPlayer, upsertPlayer, watchGame, watchRoom } from "./data/RoomRepository";
 
-const DISCONNECT_GRACE_MS = 10_000;
 const ROOM_LOAD_TIMEOUT_MS = 8_000;
 const PLAYER_HEARTBEAT_MS = 10_000;
 
@@ -23,14 +22,7 @@ export function useRoom(session: RoomSession) {
     if (!session.enabled) { setLoading(false); setError(null); setRoom(null); setGame(null); return; }
     setLoading(true); setError(null); setRoom(null); setGame(null);
     const fail = (nextError: unknown) => { if (!active) return; if (timeoutId) window.clearTimeout(timeoutId); setLoading(false); setError(toFirebaseErrorMessage(nextError)); };
-    const unsubscribe = watchRoom(session.roomId, (nextRoom) => {
-      if (!active) return;
-      roomSeen = true;
-      if (timeoutId) window.clearTimeout(timeoutId);
-      setRoom(nextRoom);
-      setError(null);
-      setLoading(false);
-    }, fail);
+    const unsubscribe = watchRoom(session.roomId, (nextRoom) => { if (!active) return; roomSeen = true; if (timeoutId) window.clearTimeout(timeoutId); setRoom(nextRoom); setError(null); setLoading(false); }, fail);
     timeoutId = window.setTimeout(() => { if (!roomSeen) fail(new Error("timeout")); }, ROOM_LOAD_TIMEOUT_MS);
     void (async () => {
       try {
@@ -46,7 +38,6 @@ export function useRoom(session: RoomSession) {
 
   useEffect(() => { if (!session.enabled) { setGame(null); return; } const gameId = room?.currentGameId; if (!gameId) { setGame(null); return; } setGame(null); return watchGame(gameId, setGame, (nextError) => setError(toFirebaseErrorMessage(nextError))); }, [room?.currentGameId, session.enabled]);
   useEffect(() => { if (!session.enabled || loading || error || !room) return; const heartbeatId = window.setInterval(() => { void touchPlayer(session.roomId, session.playerId).catch(() => {}); }, PLAYER_HEARTBEAT_MS); return () => window.clearInterval(heartbeatId); }, [error, loading, room, session.enabled, session.playerId, session.roomId]);
-  useEffect(() => { if (!session.enabled || !room || !game || game.phase !== "playing") return; const currentPlayerId = game.currentPlayerId; const currentPlayerExists = Boolean(currentPlayerId && room.players?.[currentPlayerId]); if (currentPlayerExists) return; const timeoutId = window.setTimeout(() => { if (room.currentGameId !== game.gameId) return; void recoverMissingCurrentPlayerTurn(session.roomId, game.gameId); }, DISCONNECT_GRACE_MS); return () => window.clearTimeout(timeoutId); }, [game?.gameId, game?.currentPlayerId, game?.phase, room?.currentGameId, room?.players, session.enabled, session.roomId]);
 
   const players = useMemo(() => getOrderedPlayers(room), [room]);
   const isHost = useMemo(() => isRoomHost(room, session.playerId), [room, session.playerId]);
