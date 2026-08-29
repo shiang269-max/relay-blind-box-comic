@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MapType, RoomState } from "./domain";
 import type { GameState } from "./game/GameState";
-import { closeCurrentGame, getOrderedPlayers, isRoomHost, leaveRoom, recoverMissingCurrentPlayerTurn, startGame, startPlayerPresence, submitRound, touchPlayer, upsertPlayer, watchGame, watchRoom } from "./data/RoomRepository";
+import { getOrderedPlayers, isRoomHost, leaveRoom, recoverMissingCurrentPlayerTurn, startGame, startPlayerPresence, submitRound, touchPlayer, upsertPlayer, watchGame, watchRoom } from "./data/RoomRepository";
 
 const DISCONNECT_GRACE_MS = 10_000;
 const ROOM_LOAD_TIMEOUT_MS = 8_000;
