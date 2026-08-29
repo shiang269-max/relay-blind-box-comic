@@ -3,8 +3,12 @@ import {
   type GameModeId,
 } from "./game/GameMode";
 
-export const WORLD_WIDTH = 3000;
-export const WORLD_HEIGHT = 5000;
+/**
+ * 標準接力模式使用接近 4:3 的世界尺寸。
+ * 世界模式日後會使用獨立的大型地圖尺寸，不能再把兩種需求綁在同一張 3000×5000 長條畫布。
+ */
+export const WORLD_WIDTH = 1600;
+export const WORLD_HEIGHT = 1200;
 export const TOTAL_ROUNDS = 30;
 
 export type MapType = "earth" | "space";

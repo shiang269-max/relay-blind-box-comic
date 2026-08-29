@@ -8,7 +8,12 @@ export interface Size {
   height: number;
 }
 
-/** 唯一 Camera：背景、上一頁內容與本回合筆劃共用同一世界座標。 */
+/**
+ * 唯一 Camera：背景、上一頁內容與本回合筆劃共用同一世界座標。
+ *
+ * 標準模式預設進入「局部作畫視角」，而不是一開始把整張世界縮到最小。
+ * 使用者仍可縮小查看全局，並自由拖曳／放大。
+ */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
   private position: Point = { x: 0, y: 0 };
@@ -17,7 +22,8 @@ export class Camera {
 
   constructor(
     private readonly world: Size,
-    private readonly maxZoom = 8
+    private readonly maxZoom = 8,
+    private readonly preferredZoom = 1
   ) {}
 
   get x(): number { return this.position.x; }
@@ -37,7 +43,7 @@ export class Camera {
     if (!this.initialized) {
       this.viewport = nextViewport;
       this.initialized = true;
-      this.fitToWorld();
+      this.reset();
       return;
     }
 
@@ -55,18 +61,16 @@ export class Camera {
     this.clamp();
   }
 
-  /** 初始與重設使用 cover，避免桌面橫向視窗只剩中間一條可繪製區。 */
+  /** 最小縮放：完整世界概覽。 */
   fitToWorld(): void {
-    this._zoom = this.coverZoom();
-    this.position = {
-      x: (this.world.width - this.viewport.width / this._zoom) / 2,
-      y: (this.world.height - this.viewport.height / this._zoom) / 2,
-    };
-    this.clamp();
+    this._zoom = this.fitZoom();
+    this.centerOn({ x: this.world.width / 2, y: this.world.height / 2 });
   }
 
+  /** 初始／重設：回到適合作畫的局部視角。 */
   reset(): void {
-    this.fitToWorld();
+    this._zoom = this.initialZoom();
+    this.centerOn({ x: this.world.width / 2, y: this.world.height / 2 });
   }
 
   setZoom(zoom: number): void {
@@ -109,6 +113,14 @@ export class Camera {
     this.clamp();
   }
 
+  /** 點擊概覽中的區域後，直接將該區域帶回作畫視角中央。 */
+  focusAtScreen(screen: Point): void {
+    if (!Number.isFinite(screen.x) || !Number.isFinite(screen.y)) return;
+    const target = this.screenToWorld(screen);
+    this._zoom = this.initialZoom();
+    this.centerOn(target);
+  }
+
   screenToWorld(point: Point): Point {
     return {
       x: point.x / this._zoom + this.position.x,
@@ -127,15 +139,20 @@ export class Camera {
     return point.x >= 0 && point.y >= 0 && point.x <= this.world.width && point.y <= this.world.height;
   }
 
-  private fitZoom(): number {
-    return Math.min(
-      this.viewport.width / this.world.width,
-      this.viewport.height / this.world.height
-    );
+  private initialZoom(): number {
+    return this.clampZoom(Math.max(this.preferredZoom, this.fitZoom()));
   }
 
-  private coverZoom(): number {
-    return Math.max(
+  private centerOn(point: Point): void {
+    this.position = {
+      x: point.x - this.viewport.width / (2 * this._zoom),
+      y: point.y - this.viewport.height / (2 * this._zoom),
+    };
+    this.clamp();
+  }
+
+  private fitZoom(): number {
+    return Math.min(
       this.viewport.width / this.world.width,
       this.viewport.height / this.world.height
     );
