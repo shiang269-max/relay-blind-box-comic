@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MapType, Player, RoomState } from "./domain";
 import type { GameState } from "./game/GameState";
 import { closeCurrentGame, getOrderedPlayers, isRoomHost, leaveRoom, recoverMissingCurrentPlayerTurn, startGame, startPlayerPresence, submitRound, touchPlayer, upsertPlayer, watchGame, watchRoom } from "./data/RoomRepository";
@@ -15,43 +15,45 @@ export function useRoom(session: RoomSession) {
   const [game, setGame] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const reconciledRef = useRef(false);
-  const reconcilingRef = useRef(false);
 
   useEffect(() => {
     let active = true;
-    reconciledRef.current = false;
-    reconcilingRef.current = false;
-    setLoading(true); setError(null); setRoom(null); setGame(null);
-    const fail = (nextError: unknown) => { if (!active) return; window.clearTimeout(timeoutId); setLoading(false); setError(toFirebaseErrorMessage(nextError)); };
-    const timeoutId = window.setTimeout(() => { fail(new Error("timeout")); if (active) setError("Firebase 連線逾時，請確認網路與 Realtime Database Rules。"); }, ROOM_LOAD_TIMEOUT_MS);
-    const player: Player = { id: session.playerId, name: session.playerName, joinedAt: Date.now(), activeAt: Date.now() };
     let unsubscribe: (() => void) | undefined;
-    const reconcile = async () => {
-      if (reconciledRef.current || reconcilingRef.current) return;
-      reconcilingRef.current = true;
+    let timeoutId: number | undefined;
+    setLoading(true); setError(null); setRoom(null); setGame(null);
+
+    const fail = (nextError: unknown) => {
+      if (!active) return;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      setLoading(false);
+      setError(toFirebaseErrorMessage(nextError));
+    };
+
+    const connect = async () => {
       try {
         if (!session.playerName) throw new Error("玩家名稱無效");
+        const now = Date.now();
+        const player: Player = { id: session.playerId, name: session.playerName, joinedAt: now, activeAt: now };
+
+        // Reconcile first. The room watcher must never decide whether the session is ready.
         await upsertPlayer(session.roomId, player);
         await startPlayerPresence(session.roomId, session.playerId);
-        reconciledRef.current = true;
-      } catch (nextError) { fail(nextError); }
-      finally { reconcilingRef.current = false; }
-    };
-    try {
-      unsubscribe = watchRoom(session.roomId, (nextRoom) => {
         if (!active) return;
-        if (!reconciledRef.current) {
-          if (!nextRoom && !session.createIfMissing) { window.clearTimeout(timeoutId); setRoom(null); setLoading(false); return; }
-          void reconcile();
-          return;
-        }
-        window.clearTimeout(timeoutId);
-        setRoom(nextRoom); setError(null); setLoading(false);
-      }, fail);
-    } catch (nextError) { fail(nextError); }
-    return () => { active = false; window.clearTimeout(timeoutId); unsubscribe?.(); };
-  }, [session.createIfMissing, session.playerId, session.playerName, session.roomId]);
+
+        timeoutId = window.setTimeout(() => fail(new Error("timeout")), ROOM_LOAD_TIMEOUT_MS);
+        unsubscribe = watchRoom(session.roomId, (nextRoom) => {
+          if (!active) return;
+          if (timeoutId) window.clearTimeout(timeoutId);
+          setRoom(nextRoom);
+          setError(null);
+          setLoading(false);
+        }, fail);
+      } catch (nextError) { fail(nextError); }
+    };
+
+    void connect();
+    return () => { active = false; if (timeoutId) window.clearTimeout(timeoutId); unsubscribe?.(); };
+  }, [session.playerId, session.playerName, session.roomId]);
 
   useEffect(() => {
     const gameId = room?.currentGameId;
@@ -61,7 +63,7 @@ export function useRoom(session: RoomSession) {
   }, [room?.currentGameId]);
 
   useEffect(() => {
-    if (loading || error || !room || !reconciledRef.current) return;
+    if (loading || error || !room) return;
     const heartbeatId = window.setInterval(() => { void touchPlayer(session.roomId, session.playerId).catch(() => {}); }, PLAYER_HEARTBEAT_MS);
     return () => window.clearInterval(heartbeatId);
   }, [error, loading, room, session.playerId, session.roomId]);
