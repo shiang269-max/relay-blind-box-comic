@@ -25,6 +25,16 @@ export interface RoomSession {
   createIfMissing: boolean;
 }
 
+function toFirebaseErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.message.includes("permission_denied")) {
+      return "Firebase 權限被拒絕，請檢查 Realtime Database Rules。";
+    }
+    return `Firebase 連線失敗：${error.message}`;
+  }
+  return "Firebase 連線失敗。";
+}
+
 export function useRoom(session: RoomSession) {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
@@ -35,26 +45,42 @@ export function useRoom(session: RoomSession) {
     let active = true;
     setLoading(true);
     setError(null);
+    setRoom(null);
     setGame(null);
 
-    const timeoutId = window.setTimeout(() => {
-      if (!active) return;
-      setLoading(false);
-      setError("Firebase 連線逾時，請確認網路與 Realtime Database 規則。");
-    }, ROOM_LOAD_TIMEOUT_MS);
-
-    const unsubscribe = watchRoom(session.roomId, (nextRoom) => {
+    const fail = (nextError: unknown) => {
       if (!active) return;
       window.clearTimeout(timeoutId);
-      setRoom(nextRoom);
-      setError(null);
       setLoading(false);
-    });
+      setError(toFirebaseErrorMessage(nextError));
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      fail(new Error("timeout"));
+      if (active) setError("Firebase 連線逾時，請確認網路與 Realtime Database Rules。");
+    }, ROOM_LOAD_TIMEOUT_MS);
+
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = watchRoom(
+        session.roomId,
+        (nextRoom) => {
+          if (!active) return;
+          window.clearTimeout(timeoutId);
+          setRoom(nextRoom);
+          setError(null);
+          setLoading(false);
+        },
+        fail,
+      );
+    } catch (nextError) {
+      fail(nextError);
+    }
 
     return () => {
       active = false;
       window.clearTimeout(timeoutId);
-      unsubscribe();
+      unsubscribe?.();
     };
   }, [session.roomId]);
 
@@ -64,8 +90,13 @@ export function useRoom(session: RoomSession) {
       setGame(null);
       return;
     }
+
     setGame(null);
-    return watchGame(gameId, setGame);
+    return watchGame(
+      gameId,
+      setGame,
+      (nextError) => setError(toFirebaseErrorMessage(nextError)),
+    );
   }, [room?.currentGameId]);
 
   useEffect(() => {
