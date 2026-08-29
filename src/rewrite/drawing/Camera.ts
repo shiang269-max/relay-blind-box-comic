@@ -10,6 +10,8 @@ export interface Size {
 
 /**
  * 唯一 Camera：背景、上一頁內容與本回合筆劃共用同一世界座標。
+ *
+ * 縮小用於總覽，放大用於作畫；不再把低解析世界放大到 8 倍。
  */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
@@ -19,7 +21,8 @@ export class Camera {
 
   constructor(
     private readonly world: Size,
-    private readonly maxZoom = 8
+    private readonly maxZoom = 2.5,
+    private readonly initialZoom = 1
   ) {}
 
   get x(): number { return this.position.x; }
@@ -54,7 +57,7 @@ export class Camera {
   }
 
   reset(): void {
-    this._zoom = this.maximumZoom;
+    this._zoom = this.clampZoom(this.initialZoom);
     this.centerOn({ x: this.world.width / 2, y: this.world.height / 2 });
   }
 
