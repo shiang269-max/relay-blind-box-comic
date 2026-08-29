@@ -61,14 +61,11 @@ export function getDefaultGameMode(): GameModeId {
 }
 
 /**
- * 時段不是單純依頁數，而是依「完整玩家輪替」推進。
+ * 時段以「完整玩家輪」為單位推進。
  *
- * 2 人：1-2 白天、3-4 黃昏、5-6 夜晚
- * 3 人：1-3 白天、4-6 黃昏、7-9 夜晚
- * 1 人測試：每完成一頁切換下一時段
- *
- * 這樣每一位玩家都會經歷同一個時段，不會有人固定只玩白天、
- * 另一位固定只玩夜晚。
+ * 例如 2 人：1-2 白天、3-4 黃昏、5-6 夜晚。
+ * 3 人：1-3 白天、4-6 黃昏、7-9 夜晚。
+ * 1 人測試時則每頁切換一次時段。
  */
 export function getTimeOfDay(round: number, playerCount = 1): TimeOfDay {
   const turnsPerPhase = Math.max(1, Math.floor(playerCount));
