@@ -26,10 +26,7 @@ export class DrawingSession {
   }
 
   end(): void {
-    if (!this.activeStroke) {
-      this.surface.endStroke();
-      return;
-    }
+    if (!this.activeStroke) { this.surface.endStroke(); return; }
     const completed = this.activeStroke;
     this.activeStroke = null;
     this.surface.endStroke();
@@ -37,9 +34,21 @@ export class DrawingSession {
     this.emit(completed);
   }
 
+  /** 取消未完成筆劃，並重建已提交內容，避免 Pinch 切換留下殘留筆跡。 */
   cancel(): void {
+    if (!this.activeStroke) { this.surface.endStroke(); return; }
     this.activeStroke = null;
     this.surface.endStroke();
+    this.surface.redraw(this.strokes);
+  }
+
+  undo(): boolean {
+    this.activeStroke = null;
+    this.surface.endStroke();
+    if (this.strokes.length === 0) return false;
+    this.strokes.pop();
+    this.surface.redraw(this.strokes);
+    return true;
   }
 
   clear(): void {
@@ -56,35 +65,17 @@ export class DrawingSession {
     this.surface.redraw(this.strokes);
   }
 
-  getStrokes(): readonly Stroke[] {
-    return this.strokes.map(cloneStroke);
-  }
-
-  subscribe(listener: DrawingSessionListener): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  exportPng(): string {
-    this.end();
-    return this.surface.exportPng();
-  }
+  getStrokes(): readonly Stroke[] { return this.strokes.map(cloneStroke); }
+  subscribe(listener: DrawingSessionListener): () => void { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+  exportPng(): string { this.end(); return this.surface.exportPng(); }
 
   private emit(stroke: Stroke): void {
     const snapshot = cloneStroke(stroke);
     for (const listener of this.listeners) listener(snapshot);
   }
-
-  private createStrokeId(): string {
-    const id = this.nextStrokeId++;
-    return `stroke-${Date.now()}-${id}`;
-  }
+  private createStrokeId(): string { return `stroke-${Date.now()}-${this.nextStrokeId++}`; }
 }
 
 function cloneStroke(stroke: Stroke): Stroke {
-  return {
-    id: stroke.id,
-    brush: { ...stroke.brush },
-    points: stroke.points.map((point) => ({ ...point })),
-  };
+  return { id: stroke.id, brush: { ...stroke.brush }, points: stroke.points.map((point) => ({ ...point })) };
 }
