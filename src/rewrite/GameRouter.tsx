@@ -54,10 +54,7 @@ export default function GameRouter({
       (current: GameState | null) => {
         if (!current || current.roomId !== roomId || current.phase !== "review") return;
         if (current.savedComicId) return current;
-        return {
-          ...current,
-          savedComicId: generateComicId(),
-        } satisfies GameState;
+        return { ...current, savedComicId: generateComicId() } satisfies GameState;
       },
       { applyLocally: false }
     );
