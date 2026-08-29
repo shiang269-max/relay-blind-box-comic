@@ -74,35 +74,18 @@ export async function startGame(roomId: string, playerId: string, map: MapType, 
   const gameId = generateGameId();
   const createdAt = Date.now();
   let game: GameState | null = null;
-
   const roomResult = await runTransaction(roomRef(roomId), (rawRoom: RoomState | null) => {
     if (!rawRoom) return;
-    const room: RoomState = {
-      ...rawRoom,
-      players: normalizePlayers(rawRoom.players),
-      currentGameId: typeof rawRoom.currentGameId === "string" ? rawRoom.currentGameId : null,
-      lobby: rawRoom.lobby ?? createDefaultLobbyConfig(),
-      createdAt: rawRoom.createdAt ?? createdAt,
-    };
+    const room: RoomState = { ...rawRoom, players: normalizePlayers(rawRoom.players), currentGameId: typeof rawRoom.currentGameId === "string" ? rawRoom.currentGameId : null, lobby: rawRoom.lobby ?? createDefaultLobbyConfig(), createdAt: rawRoom.createdAt ?? createdAt };
     if (!canStartGame(room, playerId)) return;
     const participantIds = orderPlayers(room.players).map((item) => item.id);
     if (!participantIds.length) return;
-
-    game = createGameState({
-      gameId, roomId, mode, map, participantIds,
-      currentPlayerId: participantIds[0] ?? null,
-      createdAt,
-      modeState: mode === "relay-30" ? createRelayModeState() : {},
-    });
-
+    game = createGameState({ gameId, roomId, mode, map, participantIds, currentPlayerId: participantIds[0] ?? null, createdAt, modeState: mode === "relay-30" ? createRelayModeState() : {} });
     return { ...room, currentGameId: gameId, lobby: { selectedMode: mode, selectedMap: map } } satisfies RoomState;
   }, { applyLocally: false });
-
   if (!roomResult.committed || !game) throw new Error("無法開始遊戲");
-
-  try {
-    await set(gameRef(gameId), game);
-  } catch (error) {
+  try { await set(gameRef(gameId), game); }
+  catch (error) {
     await runTransaction(roomRef(roomId), (current: RoomState | null) => {
       if (!current || current.currentGameId !== gameId) return;
       return { ...current, currentGameId: null } satisfies RoomState;
@@ -117,28 +100,26 @@ export async function closeCurrentGame(roomId: string, gameId: string): Promise<
   return result.committed;
 }
 
-/**
- * 先把目前頁面寫入專屬 page path，再對單一 game 節點交易推進回合。
- * 不再對 Firebase 根節點做交易，避免 RTDB 規則或大型資料根節點導致交易未提交。
- */
+/** 對單一 game 節點原子推進回合；交易 updater 絕不回傳 undefined，避免 RTDB 直接拋出 Data returned undefined。 */
 export async function submitRound(roomId: string, gameId: string, playerId: string, pageDataUrl: string): Promise<boolean> {
   if (!pageDataUrl.startsWith("data:image/")) throw new Error("送出作品格式無效");
   if (new TextEncoder().encode(pageDataUrl).byteLength > MAX_RELAY_PAGE_BYTES) throw new Error("作品快照過大，請稍後重新整理後再送出");
 
-  let pageKey: string | null = null;
   let accepted = false;
-
-  const result = await runTransaction(gameRef(gameId), (game: GameState | null) => {
-    if (!game || game.roomId !== roomId || !canSubmitRound(game, playerId)) return;
-    if (game.currentTurn < 1) return;
-    pageKey = String(game.currentTurn);
-    const nextGame = nextRoundState(game);
-    if (!nextGame) return;
+  let pageKey: string | null = null;
+  const result = await runTransaction(gameRef(gameId), (current: GameState | null) => {
+    if (!current) return current;
+    if (current.roomId !== roomId || !canSubmitRound(current, playerId) || current.currentTurn < 1) return current;
+    const nextGame = nextRoundState(current);
+    if (!nextGame) return current;
     accepted = true;
+    pageKey = String(current.currentTurn);
     return nextGame;
   }, { applyLocally: false });
 
-  if (!result.committed || !accepted || !pageKey) return false;
+  if (!accepted || !pageKey) return false;
+  const finalGame = result.snapshot.val() as GameState | null;
+  if (!finalGame || finalGame.roomId !== roomId) return false;
 
   try {
     await set(ref(db, `relayPages/${gameId}/${pageKey}`), pageDataUrl);
