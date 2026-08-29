@@ -73,19 +73,9 @@ export class DrawingSurface {
     ctx.setTransform(this.dpr * this.camera.zoom, 0, 0, this.dpr * this.camera.zoom, -this.camera.x * this.dpr * this.camera.zoom, -this.camera.y * this.dpr * this.camera.zoom);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "medium";
-    const visibleWidth = this.cssWidth / this.camera.zoom;
-    const visibleHeight = this.cssHeight / this.camera.zoom;
-    const sx = Math.max(0, Math.floor(this.camera.x));
-    const sy = Math.max(0, Math.floor(this.camera.y));
-    const sw = Math.min(this.options.worldWidth - sx, Math.ceil(visibleWidth) + 2);
-    const sh = Math.min(this.options.worldHeight - sy, Math.ceil(visibleHeight) + 2);
-    const dx = sx;
-    const dy = sy;
-    if (sw > 0 && sh > 0) {
-      ctx.drawImage(this.worldBackgroundCanvas, sx, sy, sw, sh, dx, dy, sw, sh);
-      ctx.drawImage(this.baseCanvas, sx, sy, sw, sh, dx, dy, sw, sh);
-      ctx.drawImage(this.strokeCanvas, sx, sy, sw, sh, dx, dy, sw, sh);
-    }
+    ctx.drawImage(this.worldBackgroundCanvas, 0, 0);
+    ctx.drawImage(this.baseCanvas, 0, 0);
+    ctx.drawImage(this.strokeCanvas, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
