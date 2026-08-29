@@ -20,12 +20,19 @@ const PLAYER_ID_KEY = "relay_comic_player_id";
 const PLAYER_NAME_KEY = "relay_comic_player_name";
 
 function readRoomTarget(): RoomTarget {
-  const fromHash = window.location.hash.replace("#", "").trim().toUpperCase();
+  const fromHash = window.location.hash
+    .replace("#", "")
+    .trim()
+    .toUpperCase();
+
   if (fromHash) {
     return { id: fromHash, createIfMissing: false };
   }
 
-  return { id: generateRoomId(), createIfMissing: true };
+  return {
+    id: generateRoomId(),
+    createIfMissing: true,
+  };
 }
 
 function readPlayerId(): string {
@@ -42,13 +49,19 @@ function readPlayerName(): string {
 }
 
 function AppRewrite() {
-  const [roomTarget, setRoomTarget] = useState<RoomTarget>(readRoomTarget);
+  const [roomTarget, setRoomTarget] = useState<RoomTarget>(
+    readRoomTarget
+  );
   const { id: roomId, createIfMissing } = roomTarget;
   const [playerId] = useState(readPlayerId);
   const [playerName, setPlayerName] = useState(readPlayerName);
-  const [screen, setScreen] = useState<"game" | "lobby" | "history">("game");
+  const [screen, setScreen] = useState<
+    "game" | "lobby" | "history"
+  >("game");
   const [viewingComic, setViewingComic] = useState<Comic | null>(null);
-  const [viewportHeight, setViewportHeight] = useState(getSafeViewportHeight);
+  const [viewportHeight, setViewportHeight] = useState(
+    getSafeViewportHeight
+  );
 
   const roomState = useRoom({
     roomId,
@@ -56,26 +69,52 @@ function AppRewrite() {
     playerName,
     createIfMissing,
   });
-  const { room, players, isHost, loading, start, submit, leave } = roomState;
+
+  const {
+    room,
+    game,
+    players,
+    isHost,
+    loading,
+    start,
+    submit,
+    leave,
+  } = roomState;
 
   useEffect(() => {
-    const updateViewport = () => setViewportHeight(getSafeViewportHeight());
+    const updateViewport = () =>
+      setViewportHeight(getSafeViewportHeight());
+
     updateViewport();
 
     window.addEventListener("resize", updateViewport);
-    window.visualViewport?.addEventListener("resize", updateViewport);
+    window.visualViewport?.addEventListener(
+      "resize",
+      updateViewport
+    );
 
     return () => {
       window.removeEventListener("resize", updateViewport);
-      window.visualViewport?.removeEventListener("resize", updateViewport);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        updateViewport
+      );
     };
   }, []);
 
   useEffect(() => {
     const handler = () => {
-      const nextId = window.location.hash.replace("#", "").trim().toUpperCase();
+      const nextId = window.location.hash
+        .replace("#", "")
+        .trim()
+        .toUpperCase();
+
       if (!nextId || nextId === roomTarget.id) return;
-      setRoomTarget({ id: nextId, createIfMissing: false });
+
+      setRoomTarget({
+        id: nextId,
+        createIfMissing: false,
+      });
       setScreen("game");
     };
 
@@ -84,7 +123,10 @@ function AppRewrite() {
   }, [roomTarget.id]);
 
   useEffect(() => {
-    const currentHash = window.location.hash.replace("#", "").toUpperCase();
+    const currentHash = window.location.hash
+      .replace("#", "")
+      .toUpperCase();
+
     if (currentHash !== roomId && createIfMissing) {
       window.location.hash = roomId;
     }
@@ -98,15 +140,20 @@ function AppRewrite() {
     setPlayerName(next);
   }, []);
 
-  const joinRoom = useCallback((nextRoom: string) => {
-    const normalized = nextRoom.trim().toUpperCase();
-    if (!normalized) return;
-    if (normalized === roomId) return;
+  const joinRoom = useCallback(
+    (nextRoom: string) => {
+      const normalized = nextRoom.trim().toUpperCase();
+      if (!normalized || normalized === roomId) return;
 
-    setRoomTarget({ id: normalized, createIfMissing: false });
-    setScreen("game");
-    window.location.hash = normalized;
-  }, [roomId]);
+      setRoomTarget({
+        id: normalized,
+        createIfMissing: false,
+      });
+      setScreen("game");
+      window.location.hash = normalized;
+    },
+    [roomId]
+  );
 
   const createNewRoom = useCallback(() => {
     const next = generateRoomId();
@@ -122,7 +169,10 @@ function AppRewrite() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center bg-slate-950 text-white" style={{ minHeight: viewportHeight }}>
+      <div
+        className="flex items-center justify-center bg-slate-950 text-white"
+        style={{ minHeight: viewportHeight }}
+      >
         載入房間中...
       </div>
     );
@@ -140,7 +190,12 @@ function AppRewrite() {
   }
 
   if (screen === "history") {
-    return <HistoryPage onBack={() => setScreen("lobby")} onOpen={setViewingComic} />;
+    return (
+      <HistoryPage
+        onBack={() => setScreen("lobby")}
+        onOpen={setViewingComic}
+      />
+    );
   }
 
   if (!room && !createIfMissing) {
@@ -162,11 +217,14 @@ function AppRewrite() {
 
   if (
     screen === "game" &&
-    (room?.game.phase === "playing" || room?.game.phase === "review")
+    room &&
+    game &&
+    (game.phase === "playing" || game.phase === "review")
   ) {
     return (
       <GameRouter
         room={room}
+        game={game}
         players={players}
         submit={submit}
         roomId={roomId}
