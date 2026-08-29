@@ -6,6 +6,29 @@ import {
   type RelayModeState,
 } from "./RelayModeState";
 
+/**
+ * Firebase Realtime Database 不會保留值為 null 的欄位；
+ * 讀回 snapshot 後不能直接把 undefined spread 回 transaction，否則會拋出
+ * "Data returned undefined in property ... currentData"。
+ */
+function normalizeGameState(game: GameState): GameState {
+  return {
+    gameId: game.gameId,
+    roomId: game.roomId,
+    mode: game.mode,
+    map: game.map,
+    phase: game.phase,
+    participantIds: Array.isArray(game.participantIds) ? [...game.participantIds] : [],
+    currentTurn: game.currentTurn,
+    currentPlayerId: game.currentPlayerId ?? null,
+    createdAt: game.createdAt,
+    completedAt: typeof game.completedAt === "number" ? game.completedAt : null,
+    savedComicId: typeof game.savedComicId === "string" ? game.savedComicId : null,
+    clearVote: game.clearVote ?? null,
+    modeState: game.modeState ?? {},
+  };
+}
+
 export function orderPlayers(
   players: Record<string, Player> | undefined
 ): Player[] {
@@ -62,7 +85,7 @@ export function recoverMissingCurrentPlayer(
     activePlayerIds
   );
   if (nextPlayerId === currentPlayerId) return null;
-  return { ...game, currentPlayerId: nextPlayerId };
+  return normalizeGameState({ ...game, currentPlayerId: nextPlayerId });
 }
 
 export function getClearVoteRequiredCount(game: GameState): number {
@@ -81,7 +104,7 @@ export function requestClearVote(game: GameState, playerId: string): GameState |
   if (game.phase !== "playing") return null;
   if (!game.participantIds.includes(playerId)) return null;
   if (game.clearVote) return null;
-  return {
+  return normalizeGameState({
     ...game,
     clearVote: {
       requestedBy: playerId,
@@ -89,7 +112,7 @@ export function requestClearVote(game: GameState, playerId: string): GameState |
       pageIndex: Math.max(0, game.currentTurn - 1),
       votes: { [playerId]: true },
     },
-  };
+  });
 }
 
 export function castClearVote(game: GameState, playerId: string): GameState | null {
@@ -97,43 +120,46 @@ export function castClearVote(game: GameState, playerId: string): GameState | nu
   if (!game.clearVote) return null;
   if (!game.participantIds.includes(playerId)) return null;
   if (game.clearVote.votes[playerId]) return null;
-  return {
+  return normalizeGameState({
     ...game,
     clearVote: {
       ...game.clearVote,
       votes: { ...game.clearVote.votes, [playerId]: true },
     },
-  };
+  });
 }
 
 export function cancelClearVote(game: GameState, playerId: string): GameState | null {
   if (!game.clearVote) return null;
   if (game.clearVote.requestedBy !== playerId) return null;
-  return { ...game, clearVote: null };
+  return normalizeGameState({ ...game, clearVote: null });
 }
 
 export function nextRoundState(game: GameState): GameState | null {
   if (game.phase !== "playing") return null;
   if (game.participantIds.length === 0) return null;
-  const mode = game.mode;
-  const flow = getGameFlow(mode);
+  const flow = getGameFlow(game.mode);
   const next = flow.getNextState({
     currentRound: game.currentTurn,
     currentPlayerId: game.currentPlayerId,
     playerIds: game.participantIds,
   });
-  if (mode !== "relay-30") throw new Error("目前尚未實作此模式的送出規則");
-  return {
+  if (game.mode !== "relay-30") {
+    throw new Error("目前尚未實作此模式的送出規則");
+  }
+  return normalizeGameState({
     ...game,
     phase: next.phase,
     currentTurn: next.currentRound,
     currentPlayerId: next.currentPlayerId,
     clearVote: null,
     completedAt:
-      next.phase === "review" && game.completedAt === null
+      next.phase === "review" && game.completedAt == null
         ? Date.now()
-        : game.completedAt,
-  };
+        : game.completedAt ?? null,
+    savedComicId: game.savedComicId ?? null,
+    modeState: game.modeState ?? {},
+  });
 }
 
 export function asRelayModeState(game: GameState): RelayModeState {
