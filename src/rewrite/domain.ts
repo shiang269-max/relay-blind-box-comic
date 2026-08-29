@@ -3,9 +3,12 @@ import {
   type GameModeId,
 } from "./game/GameMode";
 
-/** 標準接力模式採用較大的 3:4 直式世界，世界模式日後使用獨立尺寸。 */
-export const WORLD_WIDTH = 1500;
-export const WORLD_HEIGHT = 2000;
+/**
+ * 標準接力模式採用 3:4 直式世界。
+ * 這是世界座標與實際繪圖解析度，不是初始螢幕顯示尺寸。
+ */
+export const WORLD_WIDTH = 1800;
+export const WORLD_HEIGHT = 2400;
 export const TOTAL_ROUNDS = 30;
 
 export type MapType = "earth" | "space";
