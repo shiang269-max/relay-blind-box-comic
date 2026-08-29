@@ -1,10 +1,11 @@
 /**
- * 30頁接力模式專屬資料。
+ * 30頁接力模式專屬小型狀態。
  *
- * 不放進共用 RoomState / GameState，避免未來世界模式被 pages 結構綁住。
+ * 大型頁面影像不再放入 GameState.modeState，
+ * 正式資料儲存在 relayPages/{gameId}/{turn}。
  */
 export interface RelayModeState {
-  pages: Record<string, string>;
+  pages: Record<string, never>;
 }
 
 export function createRelayModeState(): RelayModeState {
@@ -18,18 +19,4 @@ export function getRelayPreviousPageKey(
 ): string | null {
   if (currentTurn <= 1) return null;
   return String(currentTurn - 1);
-}
-
-export function appendRelayPage(
-  state: RelayModeState,
-  turn: number,
-  pageDataUrl: string
-): RelayModeState {
-  return {
-    ...state,
-    pages: {
-      ...state.pages,
-      [String(turn)]: pageDataUrl,
-    },
-  };
 }
