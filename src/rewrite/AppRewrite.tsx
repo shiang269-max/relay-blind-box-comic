@@ -42,6 +42,10 @@ function AppRewrite() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => { if (connected) void leave().catch(() => {}); };
+  }, [connected, leave]);
+
   const saveName = useCallback(async (name: string) => {
     const next = name.trim().slice(0, 12);
     if (!next) return;
@@ -71,9 +75,8 @@ function AppRewrite() {
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
   }, []);
 
-  const handleLeaveGame = useCallback(() => {
-    returnToHome();
-    void leave().catch(() => {});
+  const handleLeaveGame = useCallback(async () => {
+    try { await leave(); } finally { returnToHome(); }
   }, [leave, returnToHome]);
 
   useEffect(() => {
