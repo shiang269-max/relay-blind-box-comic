@@ -32,20 +32,46 @@ import {
 
 const MAX_RELAY_PAGE_BYTES = 8 * 1024 * 1024;
 
+type WatchErrorCallback = (error: Error) => void;
+
 function roomRef(roomId: string) { return ref(db, `rooms/${roomId}`); }
 function gameRef(gameId: string) { return ref(db, `games/${gameId}`); }
 function relayPagesRef(gameId: string) { return ref(db, `relayPages/${gameId}`); }
 
-export function watchRoom(roomId: string, callback: (room: RoomState | null) => void): Unsubscribe {
-  return onValue(roomRef(roomId), (snapshot) => callback(snapshot.val() as RoomState | null));
+export function watchRoom(
+  roomId: string,
+  callback: (room: RoomState | null) => void,
+  onError?: WatchErrorCallback,
+): Unsubscribe {
+  return onValue(
+    roomRef(roomId),
+    (snapshot) => callback(snapshot.val() as RoomState | null),
+    (error) => onError?.(error),
+  );
 }
 
-export function watchGame(gameId: string, callback: (game: GameState | null) => void): Unsubscribe {
-  return onValue(gameRef(gameId), (snapshot) => callback(snapshot.val() as GameState | null));
+export function watchGame(
+  gameId: string,
+  callback: (game: GameState | null) => void,
+  onError?: WatchErrorCallback,
+): Unsubscribe {
+  return onValue(
+    gameRef(gameId),
+    (snapshot) => callback(snapshot.val() as GameState | null),
+    (error) => onError?.(error),
+  );
 }
 
-export function watchRelayPages(gameId: string, callback: (pages: Record<string, string>) => void): Unsubscribe {
-  return onValue(relayPagesRef(gameId), (snapshot) => callback((snapshot.val() as Record<string, string> | null) ?? {}));
+export function watchRelayPages(
+  gameId: string,
+  callback: (pages: Record<string, string>) => void,
+  onError?: WatchErrorCallback,
+): Unsubscribe {
+  return onValue(
+    relayPagesRef(gameId),
+    (snapshot) => callback((snapshot.val() as Record<string, string> | null) ?? {}),
+    (error) => onError?.(error),
+  );
 }
 
 export async function upsertPlayer(roomId: string, player: Player): Promise<void> {
