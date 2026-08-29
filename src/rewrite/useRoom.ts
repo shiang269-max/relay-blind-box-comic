@@ -4,6 +4,7 @@ import type {
   Player,
   RoomState,
 } from "./domain";
+import type { GameState } from "./game/GameState";
 import {
   getOrderedPlayers,
   isRoomHost,
@@ -13,6 +14,7 @@ import {
   startPlayerPresence,
   submitRound,
   upsertPlayer,
+  watchGame,
   watchRoom,
 } from "./data/RoomRepository";
 
@@ -27,16 +29,33 @@ export interface RoomSession {
 
 export function useRoom(session: RoomSession) {
   const [room, setRoom] = useState<RoomState | null>(null);
+  const [game, setGame] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
+    setGame(null);
 
     return watchRoom(session.roomId, (nextRoom) => {
       setRoom(nextRoom);
       setLoading(false);
     });
   }, [session.roomId]);
+
+  useEffect(() => {
+    const gameId = room?.currentGameId;
+
+    if (!gameId) {
+      setGame(null);
+      return;
+    }
+
+    setGame(null);
+
+    return watchGame(gameId, (nextGame) => {
+      setGame(nextGame);
+    });
+  }, [room?.currentGameId]);
 
   useEffect(() => {
     if (!session.playerName || loading) return;
@@ -60,10 +79,10 @@ export function useRoom(session: RoomSession) {
   ]);
 
   useEffect(() => {
-    if (!room) return;
-    if (room.game.phase !== "playing") return;
+    if (!room || !game) return;
+    if (game.phase !== "playing") return;
 
-    const currentPlayerId = room.game.currentPlayerId;
+    const currentPlayerId = game.currentPlayerId;
     const currentPlayerExists = Boolean(
       currentPlayerId && room.players[currentPlayerId]
     );
@@ -71,20 +90,30 @@ export function useRoom(session: RoomSession) {
     if (currentPlayerExists) return;
 
     const timeoutId = window.setTimeout(() => {
-      void recoverMissingCurrentPlayerTurn(session.roomId);
+      if (room.currentGameId !== game.gameId) return;
+      void recoverMissingCurrentPlayerTurn(
+        session.roomId,
+        game.gameId
+      );
     }, DISCONNECT_GRACE_MS);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
   }, [
-    room?.game.currentPlayerId,
-    room?.game.phase,
+    game?.gameId,
+    game?.currentPlayerId,
+    game?.phase,
+    room?.currentGameId,
     room?.players,
     session.roomId,
   ]);
 
-  const players = useMemo(() => getOrderedPlayers(room), [room]);
+  const players = useMemo(
+    () => getOrderedPlayers(room),
+    [room]
+  );
+
   const isHost = useMemo(
     () => isRoomHost(room, session.playerId),
     [room, session.playerId]
@@ -92,21 +121,42 @@ export function useRoom(session: RoomSession) {
 
   const start = useCallback(
     async (map: MapType) => {
-      await startGame(session.roomId, session.playerId, map);
+      await startGame(
+        session.roomId,
+        session.playerId,
+        map
+      );
     },
     [session.playerId, session.roomId]
   );
 
   const submit = useCallback(
     async (pageDataUrl: string): Promise<boolean> => {
-      return submitRound(session.roomId, session.playerId, pageDataUrl);
+      const gameId = game?.gameId;
+      if (!gameId) return false;
+
+      return submitRound(
+        session.roomId,
+        gameId,
+        session.playerId,
+        pageDataUrl
+      );
     },
-    [session.playerId, session.roomId]
+    [game?.gameId, session.playerId, session.roomId]
   );
 
   const leave = useCallback(async () => {
     await leaveRoom(session.roomId, session.playerId);
   }, [session.playerId, session.roomId]);
 
-  return { room, loading, players, isHost, start, submit, leave };
+  return {
+    room,
+    game,
+    loading,
+    players,
+    isHost,
+    start,
+    submit,
+    leave,
+  };
 }
