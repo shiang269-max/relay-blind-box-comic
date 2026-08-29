@@ -57,7 +57,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
   }, [drawMove, moveMode, pinch, sessionRef, state, surfaceRef]);
 
   const finishPointer = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
-    const canvas = event.currentTarget, surface = surfaceRef.current, session = sessionRef.current;
+    const canvas = event.currentTarget, session = sessionRef.current;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     pointers.current.delete(event.pointerId);
     if (moveMode && pointers.current.size >= 2) { session?.cancel(); resetPinch(); return; }
@@ -66,7 +66,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     if (drawingId.current === event.pointerId) { session?.end(); onStrokeEnd?.(); } else session?.cancel();
     pending.current = null; drawingId.current = null;
     if (wasMoving) startInertia(); else state("idle");
-  }, [moveMode, onStrokeEnd, resetPinch, sessionRef, startInertia, state, surfaceRef]);
+  }, [moveMode, onStrokeEnd, resetPinch, sessionRef, startInertia, state]);
 
   const handleWheel = useCallback((event: WheelEvent) => { if (!moveMode) return; event.preventDefault(); const surface = surfaceRef.current; if (!surface) return; stopInertia(); surface.camera.zoomAt(surface.eventToScreen(event), Math.exp(-event.deltaY * 0.0015)); surface.render(); }, [moveMode, stopInertia, surfaceRef]);
   return { handlePointerDown, handlePointerMove, finishPointer, handleWheel };
