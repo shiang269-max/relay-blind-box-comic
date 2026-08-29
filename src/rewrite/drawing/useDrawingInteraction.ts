@@ -45,21 +45,30 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
     const surface = surfaceRef.current, session = sessionRef.current; if (!surface || !session) return;
     stopInertia(); const screen = surface.eventToScreen(event.nativeEvent); pointers.current.set(event.pointerId, screen);
-    if (pointers.current.size >= 2) {
-      pending.current = null; if (drawingId.current !== null) session.cancel(); drawingId.current = null; panPoint.current = null; panMoved.current = false; velocity.current = { x: 0, y: 0, time: 0 }; resetPinch(); state("pinching"); return;
+
+    if (moveMode && pointers.current.size >= 2) {
+      pending.current = null; session.cancel(); drawingId.current = null; panPoint.current = null; panMoved.current = false; velocity.current = { x: 0, y: 0, time: 0 }; resetPinch(); state("pinching"); return;
     }
     if (moveMode) { session.end(); panPoint.current = screen; panMoved.current = false; velocity.current = { x: 0, y: 0, time: performance.now() }; state("moving"); return; }
+
+    // 畫筆／橡皮擦模式完全不處理雙指 Camera 手勢，避免誤畫與誤移動。
+    if (pointers.current.size > 1) {
+      pending.current = null; session.cancel(); drawingId.current = null; state("idle"); return;
+    }
     pending.current = { id: event.pointerId, start: screen }; drawingId.current = null; state(brush().eraser ? "eraser" : "drawing");
   }, [brush, moveMode, resetPinch, sessionRef, state, stopInertia, surfaceRef]);
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault(); const surface = surfaceRef.current, session = sessionRef.current; if (!surface || !session) return;
     const screen = surface.eventToScreen(event.nativeEvent); if (pointers.current.has(event.pointerId)) pointers.current.set(event.pointerId, screen);
-    if (pointers.current.size >= 2) {
+
+    if (moveMode && pointers.current.size >= 2) {
       const value = pinch();
       if (value && pinchDistance.current && pinchCenter.current) { surface.camera.zoomAt(pinchCenter.current, value.distance / pinchDistance.current); surface.camera.panByScreen(value.center.x - pinchCenter.current.x, value.center.y - pinchCenter.current.y); surface.render(); }
       pinchDistance.current = value?.distance ?? null; pinchCenter.current = value?.center ?? null; state("pinching"); return;
     }
+    if (!moveMode && pointers.current.size > 1) return;
+
     if (moveMode && panPoint.current) {
       const dx = screen.x - panPoint.current.x, dy = screen.y - panPoint.current.y; if (Math.hypot(dx, dy) > 3) panMoved.current = true;
       const now = performance.now(), dt = Math.max(1, now - velocity.current.time); surface.camera.panByScreen(dx, dy); panPoint.current = screen; velocity.current = { x: dx / dt, y: dy / dt, time: now }; surface.render(); state("moving"); return;
@@ -80,7 +89,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     const waiting = pending.current;
     const tap = waiting && waiting.id === event.pointerId && pointers.current.size === 1 ? waiting : null;
     pointers.current.delete(event.pointerId);
-    if (pointers.current.size >= 2) { session?.cancel(); resetPinch(); return; }
+    if (moveMode && pointers.current.size >= 2) { session?.cancel(); resetPinch(); return; }
     if (pointers.current.size === 1) { pending.current = null; drawingId.current = null; panPoint.current = moveMode ? [...pointers.current.values()][0] : null; panMoved.current = false; velocity.current = { x: 0, y: 0, time: performance.now() }; session?.cancel(); state(moveMode ? "moving" : "idle"); return; }
     pinchDistance.current = null; pinchCenter.current = null;
     const wasMoving = moveMode && panPoint.current !== null;
@@ -94,6 +103,6 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     if (wasMoving) startInertia(); else state("idle");
   }, [brush, moveMode, onStrokeEnd, resetPinch, sessionRef, startInertia, state, surfaceRef]);
 
-  const handleWheel = useCallback((event: WheelEvent) => { event.preventDefault(); const surface = surfaceRef.current; if (!surface) return; stopInertia(); surface.camera.zoomAt(surface.eventToScreen(event), Math.exp(-event.deltaY * 0.0015)); surface.render(); }, [stopInertia, surfaceRef]);
+  const handleWheel = useCallback((event: WheelEvent) => { if (!moveMode) return; event.preventDefault(); const surface = surfaceRef.current; if (!surface) return; stopInertia(); surface.camera.zoomAt(surface.eventToScreen(event), Math.exp(-event.deltaY * 0.0015)); surface.render(); }, [moveMode, stopInertia, surfaceRef]);
   return { handlePointerDown, handlePointerMove, finishPointer, handleWheel };
 }
