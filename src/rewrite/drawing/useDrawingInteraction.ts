@@ -13,30 +13,16 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
   const pinchDistance = useRef<number | null>(null);
   const pinchCenter = useRef<ScreenPoint | null>(null);
   const panPoint = useRef<ScreenPoint | null>(null);
-  const panMoved = useRef(false);
   const velocity = useRef({ x: 0, y: 0, time: 0 });
   const inertiaFrame = useRef<number | null>(null);
   const state = useCallback((value: InteractionState) => onInteractionChange?.(value), [onInteractionChange]);
   const stopInertia = useCallback(() => { if (inertiaFrame.current !== null) cancelAnimationFrame(inertiaFrame.current); inertiaFrame.current = null; velocity.current = { x: 0, y: 0, time: 0 }; }, []);
-
-  const pinch = useCallback(() => {
-    const values = [...pointers.current.values()];
-    if (values.length < 2) return null;
-    const [a, b] = values;
-    return { distance: Math.hypot(a.x - b.x, a.y - b.y), center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
-  }, []);
+  const pinch = useCallback(() => { const values = [...pointers.current.values()]; if (values.length < 2) return null; const [a, b] = values; return { distance: Math.hypot(a.x - b.x, a.y - b.y), center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }; }, []);
   const resetPinch = useCallback(() => { const value = pinch(); pinchDistance.current = value?.distance ?? null; pinchCenter.current = value?.center ?? null; }, [pinch]);
 
   const startInertia = useCallback(() => {
     let vx = velocity.current.x, vy = velocity.current.y, last = performance.now();
-    const step = (now: number) => {
-      const surface = surfaceRef.current;
-      if (!surface || pointers.current.size > 0) { inertiaFrame.current = null; return; }
-      const dt = Math.min(32, now - last); last = now;
-      const decay = Math.pow(0.92, dt / 16.67); vx *= decay; vy *= decay;
-      if (Math.hypot(vx, vy) < 0.03) { inertiaFrame.current = null; state("idle"); return; }
-      surface.camera.panByScreen(vx * dt, vy * dt); surface.render(); inertiaFrame.current = requestAnimationFrame(step);
-    };
+    const step = (now: number) => { const surface = surfaceRef.current; if (!surface || pointers.current.size > 0) { inertiaFrame.current = null; return; } const dt = Math.min(32, now - last); last = now; const decay = Math.pow(0.92, dt / 16.67); vx *= decay; vy *= decay; if (Math.hypot(vx, vy) < 0.03) { inertiaFrame.current = null; state("idle"); return; } surface.camera.panByScreen(vx * dt, vy * dt); surface.render(); inertiaFrame.current = requestAnimationFrame(step); };
     if (Math.hypot(vx, vy) >= 0.03) inertiaFrame.current = requestAnimationFrame(step);
   }, [state, surfaceRef]);
   useEffect(() => () => stopInertia(), [stopInertia]);
@@ -45,61 +31,35 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
     const surface = surfaceRef.current, session = sessionRef.current; if (!surface || !session) return;
     stopInertia(); const screen = surface.eventToScreen(event.nativeEvent); pointers.current.set(event.pointerId, screen);
-
-    if (moveMode && pointers.current.size >= 2) {
-      pending.current = null; session.cancel(); drawingId.current = null; panPoint.current = null; panMoved.current = false; velocity.current = { x: 0, y: 0, time: 0 }; resetPinch(); state("pinching"); return;
-    }
-    if (moveMode) { session.end(); panPoint.current = screen; panMoved.current = false; velocity.current = { x: 0, y: 0, time: performance.now() }; state("moving"); return; }
-
-    // 畫筆／橡皮擦模式完全不處理雙指 Camera 手勢，避免誤畫與誤移動。
-    if (pointers.current.size > 1) {
-      pending.current = null; session.cancel(); drawingId.current = null; state("idle"); return;
-    }
+    if (moveMode && pointers.current.size >= 2) { pending.current = null; session.cancel(); drawingId.current = null; panPoint.current = null; velocity.current = { x: 0, y: 0, time: 0 }; resetPinch(); state("pinching"); return; }
+    if (moveMode) { session.end(); panPoint.current = screen; velocity.current = { x: 0, y: 0, time: performance.now() }; state("moving"); return; }
+    if (pointers.current.size > 1) { pending.current = null; session.cancel(); drawingId.current = null; state("idle"); return; }
     pending.current = { id: event.pointerId, start: screen }; drawingId.current = null; state(brush().eraser ? "eraser" : "drawing");
   }, [brush, moveMode, resetPinch, sessionRef, state, stopInertia, surfaceRef]);
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault(); const surface = surfaceRef.current, session = sessionRef.current; if (!surface || !session) return;
     const screen = surface.eventToScreen(event.nativeEvent); if (pointers.current.has(event.pointerId)) pointers.current.set(event.pointerId, screen);
-
-    if (moveMode && pointers.current.size >= 2) {
-      const value = pinch();
-      if (value && pinchDistance.current && pinchCenter.current) { surface.camera.zoomAt(pinchCenter.current, value.distance / pinchDistance.current); surface.camera.panByScreen(value.center.x - pinchCenter.current.x, value.center.y - pinchCenter.current.y); surface.render(); }
-      pinchDistance.current = value?.distance ?? null; pinchCenter.current = value?.center ?? null; state("pinching"); return;
-    }
+    if (moveMode && pointers.current.size >= 2) { const value = pinch(); if (value && pinchDistance.current && pinchCenter.current) { surface.camera.zoomAt(pinchCenter.current, value.distance / pinchDistance.current); surface.camera.panByScreen(value.center.x - pinchCenter.current.x, value.center.y - pinchCenter.current.y); surface.render(); } pinchDistance.current = value?.distance ?? null; pinchCenter.current = value?.center ?? null; state("pinching"); return; }
     if (!moveMode && pointers.current.size > 1) return;
-
-    if (moveMode && panPoint.current) {
-      const dx = screen.x - panPoint.current.x, dy = screen.y - panPoint.current.y; if (Math.hypot(dx, dy) > 3) panMoved.current = true;
-      const now = performance.now(), dt = Math.max(1, now - velocity.current.time); surface.camera.panByScreen(dx, dy); panPoint.current = screen; velocity.current = { x: dx / dt, y: dy / dt, time: now }; surface.render(); state("moving"); return;
-    }
+    if (moveMode && panPoint.current) { const dx = screen.x - panPoint.current.x, dy = screen.y - panPoint.current.y, now = performance.now(), dt = Math.max(1, now - velocity.current.time); surface.camera.panByScreen(dx, dy); panPoint.current = screen; velocity.current = { x: dx / dt, y: dy / dt, time: now }; surface.render(); state("moving"); return; }
     const waiting = pending.current;
-    if (waiting && waiting.id === event.pointerId) {
-      if (Math.hypot(screen.x - waiting.start.x, screen.y - waiting.start.y) < 4) return;
-      if (!session.begin(surface.camera.screenToWorld(waiting.start), brush())) return;
-      pending.current = null; drawingId.current = event.pointerId;
-    }
+    if (waiting && waiting.id === event.pointerId) { if (Math.hypot(screen.x - waiting.start.x, screen.y - waiting.start.y) < 4) return; if (!session.begin(surface.camera.screenToWorld(waiting.start), brush())) return; pending.current = null; drawingId.current = event.pointerId; }
     if (drawingId.current === event.pointerId) { session.move(surface.eventToWorld(event.nativeEvent), brush()); state(brush().eraser ? "eraser" : "drawing"); }
   }, [brush, moveMode, pinch, sessionRef, state, surfaceRef]);
 
   const finishPointer = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget, surface = surfaceRef.current, session = sessionRef.current;
-    const screen = surface?.eventToScreen(event.nativeEvent) ?? null;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-    const waiting = pending.current;
-    const tap = waiting && waiting.id === event.pointerId && pointers.current.size === 1 ? waiting : null;
+    const waiting = pending.current; const tap = waiting && waiting.id === event.pointerId && pointers.current.size === 1 ? waiting : null;
     pointers.current.delete(event.pointerId);
     if (moveMode && pointers.current.size >= 2) { session?.cancel(); resetPinch(); return; }
-    if (pointers.current.size === 1) { pending.current = null; drawingId.current = null; panPoint.current = moveMode ? [...pointers.current.values()][0] : null; panMoved.current = false; velocity.current = { x: 0, y: 0, time: performance.now() }; session?.cancel(); state(moveMode ? "moving" : "idle"); return; }
-    pinchDistance.current = null; pinchCenter.current = null;
-    const wasMoving = moveMode && panPoint.current !== null;
-    const shouldFocus = Boolean(moveMode && !panMoved.current && surface && screen && surface.camera.zoom <= surface.camera.minimumZoom * 1.35);
-    panPoint.current = null;
+    if (pointers.current.size === 1) { pending.current = null; drawingId.current = null; panPoint.current = moveMode ? [...pointers.current.values()][0] : null; velocity.current = { x: 0, y: 0, time: performance.now() }; session?.cancel(); state(moveMode ? "moving" : "idle"); return; }
+    pinchDistance.current = null; pinchCenter.current = null; const wasMoving = moveMode && panPoint.current !== null; panPoint.current = null;
     if (tap && !moveMode && surface && session) { session.begin(surface.camera.screenToWorld(tap.start), brush()); session.end(); onStrokeEnd?.(); }
     else if (drawingId.current === event.pointerId) { session?.end(); onStrokeEnd?.(); }
     else session?.cancel();
     pending.current = null; drawingId.current = null;
-    if (shouldFocus && surface && screen) { surface.camera.focusAtScreen(screen); surface.render(); state("idle"); return; }
     if (wasMoving) startInertia(); else state("idle");
   }, [brush, moveMode, onStrokeEnd, resetPinch, sessionRef, startInertia, state, surfaceRef]);
 
