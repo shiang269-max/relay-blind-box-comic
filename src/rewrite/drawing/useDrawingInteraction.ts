@@ -41,8 +41,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
 
   const drawMove = useCallback((event: PointerEvent, surface: DrawingSurface, session: DrawingSession) => {
     if (drawingId.current !== event.pointerId) return;
-    const coalesced = event.getCoalescedEvents?.() ?? [event];
-    for (const sample of coalesced) session.move(surface.eventToWorld(sample), brush());
+    session.move(surface.eventToWorld(event), brush());
     state(brush().eraser ? "eraser" : "drawing");
   }, [brush, state]);
 
