@@ -13,129 +13,140 @@ canvas { touch-action: none; }
 .game-atmosphere * { pointer-events: none; }
 .game-atmosphere__sky, .game-atmosphere__horizon, .game-atmosphere__earth-art, .game-atmosphere__space-art, .game-atmosphere__clouds, .game-atmosphere__stars, .game-atmosphere__moon, .game-atmosphere__sun, .game-atmosphere__nebula, .game-atmosphere__glow, .game-atmosphere__vignette, .game-atmosphere__rain, .game-atmosphere__meteors { position: absolute; pointer-events: none; }
 
-.game-atmosphere__sky { inset: 0; background: linear-gradient(180deg, #82d9ee 0%, #bce8dc 43%, #82c3b7 72%, #345d68 100%); }
-.game-atmosphere__horizon { left: -8%; right: -8%; bottom: 10%; height: 34%; background: radial-gradient(ellipse at 50% 100%, rgba(244,255,248,.24), transparent 62%); filter: blur(20px); opacity: .9; }
-.game-atmosphere__glow { inset: -18%; background: radial-gradient(ellipse at 74% 14%, rgba(255,244,198,.3), transparent 21%), radial-gradient(ellipse at 20% 52%, rgba(255,255,255,.1), transparent 30%); animation: atmosphere-breathe 13s ease-in-out infinite alternate; }
-.game-atmosphere__vignette { inset: 0; background: radial-gradient(ellipse at center, transparent 48%, rgba(4,17,27,.32) 100%); }
+/* The atmosphere is a real scene behind the interactive canvas, not part of the drawing surface. */
+.game-atmosphere__sky { inset: 0; background: linear-gradient(180deg, #8edcf0 0%, #bfe8df 42%, #8ebfae 69%, #426875 100%); }
+.game-atmosphere__horizon { left: -10%; right: -10%; bottom: 7%; height: 39%; background: radial-gradient(ellipse at 50% 100%, rgba(235,255,247,.32), rgba(183,225,211,.1) 35%, transparent 70%); filter: blur(24px); opacity: .85; }
+.game-atmosphere__glow { inset: -16%; background: radial-gradient(ellipse at 78% 12%, rgba(255,246,204,.3), transparent 23%), radial-gradient(ellipse at 20% 50%, rgba(255,255,255,.08), transparent 30%); animation: atmosphere-breathe 14s ease-in-out infinite alternate; }
+.game-atmosphere__vignette { inset: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(3,15,24,.3) 100%); }
 
 .game-atmosphere__earth-art, .game-atmosphere__space-art { inset: 0; width: 100%; height: 100%; }
-.earth-art__far { fill: rgba(45,93,94,.64); }
-.earth-art__mountain { fill: url(#earth-mountain); opacity: .94; }
-.earth-art__ground { fill: url(#earth-ground); opacity: .9; }
-.earth-art__ridge { stroke: url(#earth-ridge); stroke-width: 7; opacity: .42; }
-.earth-art__light { animation: earth-light-breathe 11s ease-in-out infinite alternate; transform-origin: 940px 135px; }
-.earth-art__mist ellipse { fill: rgba(233,255,248,.28); }
-.earth-art__mist { animation: mist-drift 22s ease-in-out infinite alternate; }
-.earth-art__sun-rays path { fill: rgba(255,224,164,.08); animation: ray-shift 15s ease-in-out infinite alternate; }
-.earth-art__terrain-lines { stroke: rgba(196,235,218,.2); stroke-width: 4; opacity: .5; animation: terrain-breathe 9s ease-in-out infinite alternate; }
-.earth-art__birds { fill: none; stroke: rgba(27,61,70,.42); stroke-width: 3; stroke-linecap: round; }
-.earth-art__birds path { animation: bird-drift 13s ease-in-out infinite alternate; }
-.earth-art__birds path:nth-child(2) { animation-delay: -4s; }
-.earth-art__birds path:nth-child(3) { animation-delay: -8s; }
-.earth-art__birds path:nth-child(4) { animation-delay: -11s; }
+.game-atmosphere__earth-art { transform: scale(1.01); transform-origin: center; }
+.earth-art__sun { transform-origin: 930px 125px; animation: earth-sun-float 13s ease-in-out infinite alternate; }
+.earth-art__rays { opacity: .7; animation: earth-rays-drift 17s ease-in-out infinite alternate; }
+.earth-art__far { opacity: .92; }
+.earth-art__far-snow { stroke: rgba(218,244,232,.26); stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; opacity: .45; }
+.earth-art__mid { opacity: .96; }
+.earth-art__mid-light { stroke: rgba(170,213,192,.26); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; opacity: .5; }
+.earth-art__front { opacity: .98; }
+.earth-art__river { opacity: .7; animation: river-glint 8s ease-in-out infinite alternate; }
+.earth-art__trees { fill: rgba(18,53,47,.72); opacity: .72; }
+.earth-art__mist ellipse { fill: rgba(231,255,246,.3); }
+.earth-art__mist { animation: mist-drift 24s ease-in-out infinite alternate; }
+.earth-art__birds { fill: none; stroke: rgba(28,61,67,.48); stroke-width: 3; stroke-linecap: round; }
+.earth-art__birds path { animation: bird-drift 16s ease-in-out infinite alternate; }
+.earth-art__birds path:nth-child(2) { animation-delay: -5s; }
+.earth-art__birds path:nth-child(3) { animation-delay: -10s; }
 
 .game-atmosphere__clouds { inset: 0; }
-.game-atmosphere__clouds i { position: absolute; display: block; width: clamp(180px, 28vw, 390px); height: clamp(50px, 8vw, 96px); border-radius: 999px; background: radial-gradient(ellipse at 34% 45%, rgba(255,255,255,.54), rgba(255,255,255,.18) 52%, transparent 74%); filter: blur(10px); opacity: .56; animation: cloud-float 54s linear infinite; }
-.game-atmosphere__clouds i:nth-child(1) { top: 18%; left: -32%; animation-duration: 58s; }
-.game-atmosphere__clouds i:nth-child(2) { top: 34%; left: 32%; opacity: .26; transform: scale(.7); animation-duration: 71s; animation-delay: -31s; }
-.game-atmosphere__clouds i:nth-child(3) { top: 8%; left: 68%; opacity: .18; transform: scale(.52); animation-duration: 82s; animation-delay: -51s; }
+.game-atmosphere__clouds i { position: absolute; display: block; width: clamp(190px, 30vw, 430px); height: clamp(48px, 7vw, 90px); border-radius: 999px; background: radial-gradient(ellipse at 34% 48%, rgba(255,255,255,.68), rgba(255,255,255,.24) 54%, transparent 75%); filter: blur(12px); opacity: .54; animation: cloud-float 62s linear infinite; }
+.game-atmosphere__clouds i:nth-child(1) { top: 15%; left: -35%; animation-duration: 66s; }
+.game-atmosphere__clouds i:nth-child(2) { top: 31%; left: 28%; opacity: .22; transform: scale(.72); animation-duration: 82s; animation-delay: -35s; }
+.game-atmosphere__clouds i:nth-child(3) { top: 7%; left: 72%; opacity: .17; transform: scale(.5); animation-duration: 94s; animation-delay: -58s; }
 
-.game-atmosphere--dusk .game-atmosphere__sky { background: linear-gradient(180deg, #f7cfaa 0%, #eb8a73 35%, #a25a74 64%, #282a4b 100%); }
-.game-atmosphere--night .game-atmosphere__sky { background: linear-gradient(180deg, #203f73 0%, #182a52 43%, #0b172d 72%, #040812 100%); }
-.game-atmosphere--dusk .game-atmosphere__horizon { background: radial-gradient(ellipse at 62% 100%, rgba(255,188,126,.36), transparent 64%); }
+.game-atmosphere--dusk .game-atmosphere__sky { background: linear-gradient(180deg, #ffd8a9 0%, #ef987b 32%, #b76478 60%, #34305c 100%); }
+.game-atmosphere--night .game-atmosphere__sky { background: linear-gradient(180deg, #243f73 0%, #1a2b50 42%, #0c172b 72%, #040811 100%); }
+.game-atmosphere--dusk .game-atmosphere__horizon { background: radial-gradient(ellipse at 65% 100%, rgba(255,194,135,.38), transparent 66%); }
 .game-atmosphere--night .game-atmosphere__horizon { opacity: .3; }
 .game-atmosphere--dusk .game-atmosphere__clouds { opacity: .55; }
-.game-atmosphere--night .game-atmosphere__clouds { opacity: .16; }
-.game-atmosphere--night .earth-art__far { fill: rgba(12,37,48,.78); }
-.game-atmosphere--night .earth-art__mountain { opacity: .82; filter: brightness(.65); }
-.game-atmosphere--night .earth-art__ground { opacity: .72; filter: brightness(.58); }
-.game-atmosphere--night .earth-art__birds { stroke: rgba(11,27,37,.45); }
-.game-atmosphere--night .earth-art__sun-rays { opacity: .05; }
+.game-atmosphere--night .game-atmosphere__clouds { opacity: .13; }
+.game-atmosphere--night .earth-art__far { filter: brightness(.66) saturate(.8); }
+.game-atmosphere--night .earth-art__mid { filter: brightness(.56) saturate(.72); }
+.game-atmosphere--night .earth-art__front { filter: brightness(.48) saturate(.68); }
+.game-atmosphere--night .earth-art__far-snow, .game-atmosphere--night .earth-art__mid-light { opacity: .16; }
+.game-atmosphere--night .earth-art__trees { fill: rgba(6,24,28,.92); }
+.game-atmosphere--night .earth-art__birds { opacity: .16; }
 
-.game-atmosphere__sun { width: clamp(78px, 13vw, 175px); aspect-ratio: 1; right: 12%; top: 9%; border-radius: 50%; background: radial-gradient(circle, #fffdf1 0 15%, #ffe9ad 31%, rgba(255,201,124,.2) 60%, transparent 74%); animation: sun-pulse 9s ease-in-out infinite alternate; }
-.game-atmosphere--dusk .game-atmosphere__sun { opacity: .64; }
+.game-atmosphere__sun { width: clamp(78px, 13vw, 175px); aspect-ratio: 1; right: 12%; top: 8%; border-radius: 50%; background: radial-gradient(circle, #fffdf1 0 15%, #ffe9ad 31%, rgba(255,201,124,.2) 60%, transparent 74%); animation: sun-pulse 10s ease-in-out infinite alternate; }
+.game-atmosphere--dusk .game-atmosphere__sun { opacity: .58; }
 .game-atmosphere--night .game-atmosphere__sun { display: none; }
-.game-atmosphere__moon { display: none; width: clamp(62px, 10vw, 130px); aspect-ratio: 1; right: 13%; top: 9%; border-radius: 50%; background: radial-gradient(circle at 34% 30%, #fff, #dcecff 52%, #8195b0 100%); box-shadow: 0 0 60px rgba(191,219,254,.22); }
-.game-atmosphere--night .game-atmosphere__moon { display: block; animation: moon-float 10s ease-in-out infinite alternate; }
+.game-atmosphere__moon { display: none; width: clamp(62px, 10vw, 130px); aspect-ratio: 1; right: 13%; top: 8%; border-radius: 50%; background: radial-gradient(circle at 34% 30%, #fff, #dcecff 52%, #8195b0 100%); box-shadow: 0 0 70px rgba(191,219,254,.22); }
+.game-atmosphere--night .game-atmosphere__moon { display: block; animation: moon-float 12s ease-in-out infinite alternate; }
 
-.game-atmosphere__stars { inset: 0; opacity: 0; background-image: radial-gradient(circle at 18px 24px, rgba(255,255,255,.9) 0 1px, transparent 1.8px), radial-gradient(circle at 72px 60px, rgba(191,219,254,.68) 0 1px, transparent 1.8px); background-size: 137px 137px, 211px 211px; animation: star-shift 58s linear infinite; }
-.game-atmosphere--night .game-atmosphere__stars { opacity: .38; animation: star-shift 58s linear infinite, night-star-twinkle 6s ease-in-out infinite alternate; }
+.game-atmosphere__stars { inset: 0; opacity: 0; background-image: radial-gradient(circle at 18px 24px, rgba(255,255,255,.86) 0 1px, transparent 1.8px), radial-gradient(circle at 72px 60px, rgba(191,219,254,.62) 0 1px, transparent 1.8px); background-size: 137px 137px, 211px 211px; animation: star-shift 68s linear infinite; }
+.game-atmosphere--night .game-atmosphere__stars { opacity: .34; animation: star-shift 68s linear infinite, night-star-twinkle 7s ease-in-out infinite alternate; }
 
-.game-atmosphere--space .game-atmosphere__sky { background: radial-gradient(ellipse at 22% 72%, #293f83 0%, #111a3d 30%, #060a1b 64%, #02040b 100%); }
-.game-atmosphere--space.game-atmosphere--dusk .game-atmosphere__sky { background: radial-gradient(ellipse at 68% 18%, #743f88 0%, #211936 43%, #060812 100%); }
-.game-atmosphere--space.game-atmosphere--night .game-atmosphere__sky { background: radial-gradient(ellipse at 28% 66%, #172b61 0%, #080d21 48%, #010207 100%); }
+/* Space uses depth: faint far stars, a nebula field, a single readable planet, and only rare motion. */
+.game-atmosphere--space .game-atmosphere__sky { background: radial-gradient(ellipse at 18% 70%, #263d7d 0%, #101937 31%, #05091a 65%, #010207 100%); }
+.game-atmosphere--space.game-atmosphere--dusk .game-atmosphere__sky { background: radial-gradient(ellipse at 68% 18%, #713f86 0%, #211936 42%, #060812 100%); }
+.game-atmosphere--space.game-atmosphere--night .game-atmosphere__sky { background: radial-gradient(ellipse at 25% 64%, #172a60 0%, #080d21 47%, #010207 100%); }
 .game-atmosphere--space .game-atmosphere__earth-art { display: none; }
 .game-atmosphere--space .game-atmosphere__clouds, .game-atmosphere--space .game-atmosphere__sun, .game-atmosphere--space .game-atmosphere__moon { display: none; }
-.game-atmosphere--space .game-atmosphere__stars { opacity: .88; background-image: radial-gradient(circle at 20px 20px, rgba(255,255,255,.96) 0 1.4px, transparent 2.2px), radial-gradient(circle at 70px 55px, rgba(148,197,255,.82) 0 1px, transparent 1.8px), radial-gradient(circle at 40px 90px, rgba(255,255,255,.54) 0 1px, transparent 1.7px); background-size: 113px 113px, 173px 173px, 257px 257px; animation: star-shimmer 6s ease-in-out infinite alternate, star-parallax 48s linear infinite; }
-.space-art__nebula-a { fill: rgba(105,87,238,.28); }
-.space-art__nebula-b { fill: rgba(39,158,213,.22); }
-.space-art__nebula-ribbon { animation: nebula-ribbon-drift 28s ease-in-out infinite alternate; }
-.space-art__planet-glow { fill: rgba(72,190,244,.16); }
-.space-art__planet-wrap { transform-origin: 930px 245px; animation: planet-float 15s ease-in-out infinite alternate; }
-.space-art__planet { fill: url(#space-planet); stroke: rgba(194,235,255,.24); stroke-width: 3; }
-.space-art__planet-craters { animation: planet-detail-drift 15s ease-in-out infinite alternate; }
-.space-art__planet-shine { animation: planet-shine 8s ease-in-out infinite alternate; }
-.space-art__ring-back, .space-art__ring-front { fill: none; stroke: url(#space-ring); stroke-width: 16; transform: rotate(-14deg); transform-origin: 930px 245px; }
-.space-art__ring-back { opacity: .42; }
-.space-art__ring-front { opacity: .78; stroke-width: 11; }
-.space-art__constellation { fill: rgba(225,244,255,.88); stroke: rgba(166,211,255,.2); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 3 16; animation: constellation-drift 21s ease-in-out infinite alternate; }
-.space-art__starscape circle { fill: rgba(238,248,255,.78); }
-.space-art__starscape circle:nth-child(3n) { fill: rgba(153,215,255,.95); }
-.space-art__starscape { animation: starscape-breathe 7s ease-in-out infinite alternate; }
-.space-art__star-glows circle { animation: star-glow 4.5s ease-in-out infinite alternate; transform-origin: center; }
-.space-art__star-glows circle:nth-child(2) { animation-delay: -1.6s; }
-.space-art__star-glows circle:nth-child(3) { animation-delay: -3s; }
-.space-art__debris circle { fill: rgba(176,210,236,.45); animation: debris-drift 18s ease-in-out infinite alternate; }
-.game-atmosphere__nebula { inset: -20%; background: radial-gradient(ellipse at 22% 42%, rgba(100,84,232,.11), transparent 30%), radial-gradient(ellipse at 72% 70%, rgba(27,157,205,.09), transparent 31%); filter: blur(30px); animation: nebula-drift 34s ease-in-out infinite alternate; }
-.game-atmosphere--space .game-atmosphere__glow { background: radial-gradient(ellipse at 74% 20%, rgba(128,214,255,.13), transparent 22%), radial-gradient(ellipse at 26% 60%, rgba(130,107,255,.11), transparent 30%); }
+.game-atmosphere--space .game-atmosphere__stars { opacity: .72; background-image: radial-gradient(circle at 20px 20px, rgba(255,255,255,.94) 0 1.2px, transparent 2px), radial-gradient(circle at 70px 55px, rgba(148,197,255,.72) 0 1px, transparent 1.8px), radial-gradient(circle at 40px 90px, rgba(255,255,255,.44) 0 .9px, transparent 1.7px); background-size: 113px 113px, 173px 173px, 257px 257px; animation: star-shimmer 8s ease-in-out infinite alternate, star-parallax 70s linear infinite; }
+.space-art__nebula-shapes ellipse { fill: rgba(91,79,224,.2); }
+.space-art__nebula-shapes ellipse:nth-child(2) { fill: rgba(36,147,211,.15); }
+.space-art__nebula-shapes ellipse:nth-child(3) { fill: rgba(126,76,224,.13); }
+.space-art__nebula-shapes { animation: nebula-shapes-drift 36s ease-in-out infinite alternate; }
+.space-art__nebula-ribbon { animation: nebula-ribbon-drift 32s ease-in-out infinite alternate; }
+.space-art__starfield circle { fill: rgba(235,248,255,.72); }
+.space-art__starfield circle:nth-child(4n) { fill: rgba(156,215,255,.92); }
+.space-art__starfield { animation: starscape-breathe 9s ease-in-out infinite alternate; }
+.space-art__star-crosses { fill: none; stroke: rgba(213,241,255,.72); stroke-width: 2; stroke-linecap: round; opacity: .62; animation: star-cross-breathe 5s ease-in-out infinite alternate; }
+.space-art__star-crosses path:nth-child(2) { animation-delay: -2s; }
+.space-art__planet-wrap { transform-origin: 930px 255px; animation: planet-float 18s ease-in-out infinite alternate; }
+.space-art__planet-glow { opacity: .65; }
+.space-art__planet { fill: url(#space-planet); stroke: rgba(194,235,255,.28); stroke-width: 3; }
+.space-art__planet-bands { fill: none; stroke: rgba(188,231,255,.13); stroke-width: 8; stroke-linecap: round; }
+.space-art__planet-craters { fill: rgba(8,42,83,.28); animation: planet-detail-drift 18s ease-in-out infinite alternate; }
+.space-art__planet-shine { animation: planet-shine 9s ease-in-out infinite alternate; }
+.space-art__ring-back, .space-art__ring-front { fill: none; stroke: url(#space-ring); stroke-width: 16; transform: rotate(-14deg); transform-origin: 930px 255px; }
+.space-art__ring-back { opacity: .4; }
+.space-art__ring-front { opacity: .76; stroke-width: 11; }
+.space-art__constellation { fill: rgba(225,244,255,.86); stroke: rgba(166,211,255,.18); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 3 16; animation: constellation-drift 26s ease-in-out infinite alternate; }
+.space-art__debris circle { fill: rgba(176,210,236,.42); animation: debris-drift 22s ease-in-out infinite alternate; }
+.game-atmosphere__nebula { inset: -20%; background: radial-gradient(ellipse at 22% 42%, rgba(100,84,232,.1), transparent 30%), radial-gradient(ellipse at 72% 70%, rgba(27,157,205,.08), transparent 31%); filter: blur(34px); animation: nebula-drift 42s ease-in-out infinite alternate; }
+.game-atmosphere--space .game-atmosphere__glow { background: radial-gradient(ellipse at 74% 20%, rgba(128,214,255,.1), transparent 22%), radial-gradient(ellipse at 26% 60%, rgba(130,107,255,.09), transparent 30%); }
 
+/* Weather is intentionally restrained: it should read as rain, not as scan-lines. */
 .game-atmosphere__rain { inset: 0; opacity: 0; overflow: hidden; }
-.game-atmosphere__rain::before, .game-atmosphere__rain::after { content: ""; position: absolute; inset: -35% -10%; background-image: linear-gradient(105deg, transparent 0 47%, rgba(225,248,255,.18) 48%, transparent 49%); background-size: 135px 190px; transform: rotate(3deg); filter: blur(.45px); }
-.game-atmosphere__rain::after { background-size: 250px 310px; opacity: .42; transform: rotate(3deg) translateX(30px); }
-.game-atmosphere--earth.game-atmosphere--progressed .game-atmosphere__rain { opacity: .2; animation: rain-fall 1.9s linear infinite; }
-.game-atmosphere--earth.game-atmosphere--progressed.game-atmosphere--dusk .game-atmosphere__rain { opacity: .13; }
-.game-atmosphere--earth.game-atmosphere--progressed.game-atmosphere--night .game-atmosphere__rain { opacity: .1; }
+.game-atmosphere__rain::before, .game-atmosphere__rain::after { content: ""; position: absolute; inset: -35% -10%; background-image: linear-gradient(108deg, transparent 0 48%, rgba(222,247,255,.12) 49%, transparent 50%); background-size: 175px 250px; transform: rotate(2deg); filter: blur(.7px); }
+.game-atmosphere__rain::after { background-size: 310px 380px; opacity: .3; transform: rotate(2deg) translateX(42px); }
+.game-atmosphere--earth.game-atmosphere--progressed .game-atmosphere__rain { opacity: .14; animation: rain-fall 2.35s linear infinite; }
+.game-atmosphere--earth.game-atmosphere--progressed.game-atmosphere--dusk .game-atmosphere__rain { opacity: .09; }
+.game-atmosphere--earth.game-atmosphere--progressed.game-atmosphere--night .game-atmosphere__rain { opacity: .075; }
 
 .game-atmosphere__meteors { inset: 0; opacity: 0; }
 .game-atmosphere--space.game-atmosphere--progressed .game-atmosphere__meteors { opacity: 1; }
-.game-atmosphere__meteors i { position: absolute; display: block; width: 130px; height: 2px; border-radius: 999px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.98) 34%, rgba(147,197,253,.42) 78%, transparent); box-shadow: 0 0 12px rgba(147,197,253,.7); transform: rotate(-28deg); animation: meteor-shoot 10s linear infinite; }
-.game-atmosphere__meteors i:nth-child(1) { top: 13%; left: -12%; animation-delay: 0s; }
-.game-atmosphere__meteors i:nth-child(2) { top: 49%; left: 44%; width: 86px; animation-delay: 4.2s; transform: rotate(-28deg) scale(.62); }
-.game-atmosphere__meteors i:nth-child(3) { top: 30%; left: 81%; width: 65px; animation-delay: 7.1s; transform: rotate(-28deg) scale(.5); }
+.game-atmosphere__meteors i { position: absolute; display: block; width: 120px; height: 2px; border-radius: 999px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.95) 34%, rgba(147,197,253,.35) 78%, transparent); box-shadow: 0 0 11px rgba(147,197,253,.62); transform: rotate(-28deg); animation: meteor-shoot 13s linear infinite; }
+.game-atmosphere__meteors i:nth-child(1) { top: 14%; left: -12%; animation-delay: 0s; }
+.game-atmosphere__meteors i:nth-child(2) { top: 48%; left: 43%; width: 82px; animation-delay: 5.4s; transform: rotate(-28deg) scale(.62); }
+.game-atmosphere__meteors i:nth-child(3) { top: 29%; left: 81%; width: 62px; animation-delay: 9.2s; transform: rotate(-28deg) scale(.5); }
 
+/* A subtle stage treatment makes the drawing viewport feel intentional without intercepting input. */
+.game-atmosphere--overlay::after { content: ""; position: absolute; inset: 0; border: 1px solid rgba(255,255,255,.08); box-shadow: inset 0 0 90px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.08); }
 .game-atmosphere--overlay { z-index: 0; }
 .game-atmosphere--overlay .game-atmosphere__sky { opacity: .98; }
-.game-atmosphere--overlay .game-atmosphere__horizon { opacity: .8; }
-.game-atmosphere--overlay .game-atmosphere__glow { opacity: .75; }
-.game-atmosphere--overlay .game-atmosphere__vignette { opacity: .9; }
+.game-atmosphere--overlay .game-atmosphere__horizon { opacity: .78; }
+.game-atmosphere--overlay .game-atmosphere__glow { opacity: .7; }
+.game-atmosphere--overlay .game-atmosphere__vignette { opacity: .82; }
 
 .turn-light { width: 14px; height: 14px; flex: 0 0 auto; border-radius: 999px; background: rgba(255,255,255,.22); box-shadow: inset 0 0 0 2px rgba(255,255,255,.08); }
 .turn-light--active { background: #67e8f9; box-shadow: 0 0 18px rgba(103,232,249,.85), 0 0 0 4px rgba(103,232,249,.12); animation: turn-pulse 1.6s ease-in-out infinite; }
 
-@keyframes atmosphere-breathe { from { transform: scale(1); opacity: .76; } to { transform: scale(1.045); opacity: 1; } }
-@keyframes earth-light-breathe { from { opacity: .52; transform: scale(.96); } to { opacity: .95; transform: scale(1.05); } }
-@keyframes mist-drift { from { transform: translate3d(-1%,0,0); } to { transform: translate3d(2%,-1.2%,0); } }
-@keyframes ray-shift { from { transform: translate3d(-10px,0,0); opacity: .4; } to { transform: translate3d(14px,6px,0); opacity: .9; } }
-@keyframes terrain-breathe { from { opacity: .35; } to { opacity: .72; } }
+@keyframes atmosphere-breathe { from { transform: scale(1); opacity: .72; } to { transform: scale(1.035); opacity: 1; } }
+@keyframes earth-sun-float { from { transform: translate3d(-4px,2px,0) scale(.98); opacity: .78; } to { transform: translate3d(5px,-3px,0) scale(1.03); opacity: 1; } }
+@keyframes earth-rays-drift { from { transform: translate3d(-12px,0,0); opacity: .35; } to { transform: translate3d(15px,5px,0); opacity: .78; } }
+@keyframes river-glint { from { opacity: .5; transform: translate3d(-4px,0,0); } to { opacity: .82; transform: translate3d(5px,-2px,0); } }
+@keyframes mist-drift { from { transform: translate3d(-1.5%,0,0); opacity: .5; } to { transform: translate3d(2%, -1%,0); opacity: .9; } }
 @keyframes cloud-float { from { translate: 0 0; } to { translate: 145vw -2vh; } }
-@keyframes bird-drift { from { translate: 0 0; } to { translate: 34px -10px; } }
-@keyframes sun-pulse { from { scale: .97; opacity: .8; } to { scale: 1.04; opacity: 1; } }
+@keyframes bird-drift { from { translate: 0 0; } to { translate: 32px -9px; } }
+@keyframes sun-pulse { from { scale: .97; opacity: .78; } to { scale: 1.04; opacity: 1; } }
 @keyframes moon-float { from { translate: 0 0; } to { translate: -1vw 1vh; } }
 @keyframes star-shift { from { translate: 0 0; } to { translate: -2vw 1vh; } }
-@keyframes night-star-twinkle { from { filter: brightness(.8); } to { filter: brightness(1.12); } }
-@keyframes star-shimmer { from { opacity: .68; } to { opacity: 1; } }
-@keyframes star-parallax { from { translate: 0 0; } to { translate: -1.5vw .7vh; } }
-@keyframes star-glow { from { opacity: .35; scale: .86; } to { opacity: 1; scale: 1.12; } }
-@keyframes starscape-breathe { from { opacity: .7; } to { opacity: 1; } }
-@keyframes nebula-drift { from { translate: -2% 1%; scale: 1; } to { translate: 3% -2%; scale: 1.08; } }
-@keyframes nebula-ribbon-drift { from { transform: translate3d(-2%,1%,0) rotate(-1deg); opacity: .55; } to { transform: translate3d(2%,-1%,0) rotate(1deg); opacity: 1; } }
-@keyframes planet-float { from { transform: translate3d(0,0,0) rotate(-1deg); } to { transform: translate3d(-11px,9px,0) rotate(1.5deg); } }
-@keyframes planet-detail-drift { from { transform: translate3d(0,0,0); opacity: .55; } to { transform: translate3d(-4px,3px,0); opacity: .78; } }
-@keyframes planet-shine { from { opacity: .3; transform: translate3d(-4px,2px,0); } to { opacity: .9; transform: translate3d(6px,-3px,0); } }
-@keyframes constellation-drift { from { transform: translate3d(0,0,0); opacity: .6; } to { transform: translate3d(-11px,7px,0); opacity: .95; } }
-@keyframes debris-drift { from { transform: translate3d(0,0,0); opacity: .35; } to { transform: translate3d(-18px,-7px,0); opacity: .8; } }
+@keyframes night-star-twinkle { from { filter: brightness(.8); } to { filter: brightness(1.08); } }
+@keyframes star-shimmer { from { opacity: .62; } to { opacity: .88; } }
+@keyframes star-parallax { from { translate: 0 0; } to { translate: -1.2vw .5vh; } }
+@keyframes star-cross-breathe { from { opacity: .35; } to { opacity: .82; } }
+@keyframes nebula-shapes-drift { from { transform: translate3d(-1.5%,1%,0) scale(1); } to { transform: translate3d(2%,-1.5%,0) scale(1.05); } }
+@keyframes nebula-drift { from { translate: -2% 1%; scale: 1; } to { translate: 3% -2%; scale: 1.06; } }
+@keyframes nebula-ribbon-drift { from { transform: translate3d(-2%,1%,0) rotate(-1deg); opacity: .5; } to { transform: translate3d(2%,-1%,0) rotate(1deg); opacity: .92; } }
+@keyframes planet-float { from { transform: translate3d(0,0,0) rotate(-.7deg); } to { transform: translate3d(-10px,8px,0) rotate(1deg); } }
+@keyframes planet-detail-drift { from { transform: translate3d(0,0,0); opacity: .4; } to { transform: translate3d(-4px,3px,0); opacity: .7; } }
+@keyframes planet-shine { from { opacity: .25; transform: translate3d(-4px,2px,0); } to { opacity: .85; transform: translate3d(6px,-3px,0); } }
+@keyframes starscape-breathe { from { opacity: .66; } to { opacity: 1; } }
+@keyframes constellation-drift { from { transform: translate3d(0,0,0); opacity: .55; } to { transform: translate3d(-9px,6px,0); opacity: .9; } }
+@keyframes debris-drift { from { transform: translate3d(0,0,0); opacity: .3; } to { transform: translate3d(-16px,-6px,0); opacity: .7; } }
 @keyframes rain-fall { from { transform: translate3d(0,-18%,0); } to { transform: translate3d(5%,18%,0); } }
-@keyframes meteor-shoot { 0%, 78% { opacity: 0; transform: translate3d(0,0,0) rotate(-28deg); } 80% { opacity: 1; } 92% { opacity: 1; transform: translate3d(50vw,31vh,0) rotate(-28deg); } 100% { opacity: 0; transform: translate3d(64vw,40vh,0) rotate(-28deg); } }
+@keyframes meteor-shoot { 0%, 82% { opacity: 0; transform: translate3d(0,0,0) rotate(-28deg); } 84% { opacity: 1; } 93% { opacity: 1; transform: translate3d(46vw,28vh,0) rotate(-28deg); } 100% { opacity: 0; transform: translate3d(60vw,37vh,0) rotate(-28deg); } }
 @keyframes turn-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
 
 @media (prefers-reduced-motion: reduce) {
