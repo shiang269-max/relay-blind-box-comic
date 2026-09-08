@@ -16,7 +16,7 @@ type InteractionState = "idle" | "drawing" | "moving" | "pinching" | "eraser";
 interface DrawingScreenProps {
   mode: GameMode; roomId: string; gameId: string; pageIndex: number; round: number; playerCount: number;
   map: MapType; playerName: string; previousPage: string | null;
-  onSubmit: (dataUrl: string) => Promise<boolean> | boolean;
+  onSubmit: (dataUrl: string, score?: number) => Promise<boolean> | boolean;
   onLeaveGame: () => Promise<void> | void;
 }
 
@@ -72,10 +72,15 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
   useEffect(() => { const canvas = canvasRef.current; if (!canvas) return; canvas.addEventListener("wheel", handleWheel, { passive: false }); return () => canvas.removeEventListener("wheel", handleWheel); }, [handleWheel]);
 
   const handleSubmit = async () => {
-    const session = sessionRef.current, lifecycle = lifecycleRef.current; if (!session || !lifecycle || submitting || loadingDrawing || leaving) return;
+    const session = sessionRef.current, lifecycle = lifecycleRef.current, surface = surfaceRef.current; if (!session || !lifecycle || !surface || submitting || loadingDrawing || leaving) return;
     setSubmitting(true); setSubmitError(null);
-    try { if (autosaveTimerRef.current !== null) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; } await lifecycle.saveSnapshot(); const committed = await onSubmit(session.exportPng()); if (!committed) setSubmitError("目前回合已經變更，作品暫存已保留，請等待最新房間狀態。"); }
-    catch (error) { console.error("送出回合失敗", error); setSubmitError("送出失敗，作品暫存已保留，可以重新嘗試。"); }
+    try {
+      if (autosaveTimerRef.current !== null) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; }
+      await lifecycle.saveSnapshot();
+      const score = surface.getStrokeCoverageScore();
+      const committed = await onSubmit(session.exportPng(), score);
+      if (!committed) setSubmitError("目前回合已經變更，作品暫存已保留，請等待最新房間狀態。");
+    } catch (error) { console.error("送出回合失敗", error); setSubmitError("送出失敗，作品暫存已保留，可以重新嘗試。"); }
     finally { setSubmitting(false); }
   };
 
@@ -95,8 +100,8 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
   const ModeIcon = moveMode ? Hand : interaction === "eraser" || eraser ? Eraser : PenLine;
 
   return <div className="relative flex w-screen flex-col overflow-hidden text-white" style={{ height: "var(--app-height, 100svh)", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
-    <GameAtmosphere map={map} round={round} />
-    <header className="relative z-10 shrink-0 border-b border-white/10 bg-slate-950/35 px-3 py-2 backdrop-blur-xl">
+    <GameAtmosphere map={map} round={round} overlay />
+    <header className="relative z-20 shrink-0 border-b border-white/10 bg-slate-950/35 px-3 py-2 backdrop-blur-xl">
       <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{playerName} 的回合</div><div className="truncate text-xs text-white/70">{mode.label} · {roundLabel} · {timeLabel}{autosaveLabel ? ` · ${autosaveLabel}` : ""}</div></div><button onClick={handleLeave} disabled={submitting || leaving} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-white/10 px-3 text-sm font-bold disabled:opacity-50" title="離開遊戲"><LogOut size={18} />{leaving ? "離開中" : "離開"}</button><button onClick={handleSubmit} disabled={submitting || loadingDrawing || leaving} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-green-500/90 px-4 text-sm font-bold shadow-lg shadow-green-950/30 disabled:opacity-50"><Check size={18} />{loadingDrawing ? "載入中" : submitting ? "送出中" : "送出"}</button></div>
       {progress !== null && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-amber-200 to-indigo-300 transition-[width] duration-700" style={{ width: `${progress}%` }} /></div>}
       {submitError && <div className="mt-2 rounded-xl border border-red-300/20 bg-red-950/45 px-3 py-2 text-xs text-red-100">{submitError}</div>}
@@ -113,7 +118,7 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
       {loadingDrawing && <div className="absolute inset-0 flex items-center justify-center bg-slate-950/35 text-sm font-medium text-white backdrop-blur-sm">載入繪圖資料中...</div>}
     </main>
 
-    <section className="relative z-10 shrink-0 border-t border-white/10 bg-slate-950/45 text-white backdrop-blur-xl"><div className="flex min-h-14 items-center gap-2 px-3 py-2">
+    <section className="relative z-20 shrink-0 border-t border-white/10 bg-slate-950/45 text-white backdrop-blur-xl"><div className="flex min-h-14 items-center gap-2 px-3 py-2">
       <button onClick={() => { setMoveMode((value) => !value); setEraser(false); }} className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${moveMode ? "bg-sky-500 shadow-lg shadow-sky-950/30" : "bg-white/10"}`} title="移動畫布" aria-label="移動畫布"><Move size={20} /></button>
       <button onClick={() => { setEraser((value) => !value); setMoveMode(false); }} className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${eraser ? "bg-orange-500 shadow-lg shadow-orange-950/30" : "bg-white/10"}`} title="橡皮擦" aria-label="橡皮擦"><Eraser size={20} /></button>
       <button onClick={() => { void lifecycleRef.current?.undo().then((changed) => { if (changed) setAutosaveState("saved"); }); }} className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-white/10" title="返回上一步" aria-label="返回上一步"><Undo2 size={19} /></button>
