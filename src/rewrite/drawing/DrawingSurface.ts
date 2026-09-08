@@ -20,6 +20,7 @@ export class DrawingSurface {
   private cssHeight = 1;
   private dpr = 1;
   private lastPoint: Point | null = null;
+  private renderFrame: number | null = null;
 
   constructor(private readonly viewportCanvas: HTMLCanvasElement, private readonly options: SurfaceOptions) {
     const context = viewportCanvas.getContext("2d"); if (!context) throw new Error("無法建立 viewport context");
@@ -30,15 +31,16 @@ export class DrawingSurface {
     this.paintWorldBackground();
     this.camera = new Camera({ width: options.worldWidth, height: options.worldHeight });
   }
-  resize(cssWidth: number, cssHeight: number): void { this.cssWidth = Math.max(1, Math.round(cssWidth)); this.cssHeight = Math.max(1, Math.round(cssHeight)); this.dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2)); this.viewportCanvas.width = Math.round(this.cssWidth * this.dpr); this.viewportCanvas.height = Math.round(this.cssHeight * this.dpr); this.viewportCanvas.style.width = `${this.cssWidth}px`; this.viewportCanvas.style.height = `${this.cssHeight}px`; this.camera.setViewport(this.cssWidth, this.cssHeight); this.render(); }
+  resize(cssWidth: number, cssHeight: number): void { const wasPending = this.renderFrame !== null; if (this.renderFrame !== null) cancelAnimationFrame(this.renderFrame); this.renderFrame = null; this.cssWidth = Math.max(1, Math.round(cssWidth)); this.cssHeight = Math.max(1, Math.round(cssHeight)); this.dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2)); this.viewportCanvas.width = Math.round(this.cssWidth * this.dpr); this.viewportCanvas.height = Math.round(this.cssHeight * this.dpr); this.viewportCanvas.style.width = `${this.cssWidth}px`; this.viewportCanvas.style.height = `${this.cssHeight}px`; this.camera.setViewport(this.cssWidth, this.cssHeight); this.render(); void wasPending; }
   eventToScreen(event: PointerEvent | WheelEvent): Point { const rect = this.viewportCanvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * this.cssWidth / Math.max(1, rect.width), y: (event.clientY - rect.top) * this.cssHeight / Math.max(1, rect.height) }; }
   eventToWorld(event: PointerEvent): Point { return this.camera.screenToWorld(this.eventToScreen(event)); }
   startStroke(point: Point, brush: Brush): boolean { if (!this.camera.isInsideWorld(point)) return false; this.lastPoint = point; this.drawDot(point, brush); this.render(); return true; }
-  continueStroke(point: Point, brush: Brush): void { if (!this.lastPoint) return; this.drawSegment(this.lastPoint, point, brush); this.lastPoint = point; this.render(); }
+  continueStroke(point: Point, brush: Brush): void { if (!this.lastPoint) return; this.drawSegment(this.lastPoint, point, brush); this.lastPoint = point; this.requestRender(); }
   endStroke(): void { this.lastPoint = null; }
   clear(): void { this.endStroke(); this.strokeContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight); this.render(); }
   redraw(strokes: readonly Stroke[]): void { this.endStroke(); this.strokeContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight); for (const stroke of strokes) this.drawStroke(stroke); this.render(); }
   async loadImage(source: string): Promise<void> { const image = new Image(); image.decoding = "async"; await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("上一頁圖片載入失敗")); image.src = source; }); this.endStroke(); this.baseContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight); this.baseContext.drawImage(image, 0, 0, this.options.worldWidth, this.options.worldHeight); this.render(); }
+  requestRender(): void { if (this.renderFrame !== null) return; this.renderFrame = requestAnimationFrame(() => { this.renderFrame = null; this.render(); }); }
   render(): void { const ctx = this.viewportContext; ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); ctx.clearRect(0, 0, this.cssWidth, this.cssHeight); ctx.setTransform(this.dpr * this.camera.zoom, 0, 0, this.dpr * this.camera.zoom, -this.camera.x * this.dpr * this.camera.zoom, -this.camera.y * this.dpr * this.camera.zoom); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "medium"; ctx.drawImage(this.worldBackgroundCanvas, 0, 0); ctx.drawImage(this.baseCanvas, 0, 0); ctx.drawImage(this.strokeCanvas, 0, 0); ctx.setTransform(1, 0, 0, 1, 0, 0); }
   exportPng(): string { this.endStroke(); const scale = Math.min(1, EXPORT_MAX_WIDTH / this.options.worldWidth, EXPORT_MAX_HEIGHT / this.options.worldHeight); const width = Math.max(1, Math.round(this.options.worldWidth * scale)); const height = Math.max(1, Math.round(this.options.worldHeight * scale)); const output = document.createElement("canvas"); output.width = width; output.height = height; const ctx = output.getContext("2d"); if (!ctx) throw new Error("無法建立輸出畫布"); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.clearRect(0, 0, width, height); ctx.drawImage(this.baseCanvas, 0, 0, width, height); ctx.drawImage(this.strokeCanvas, 0, 0, width, height); return output.toDataURL("image/png"); }
   private createWorldCanvas(): HTMLCanvasElement { const canvas = document.createElement("canvas"); canvas.width = this.options.worldWidth; canvas.height = this.options.worldHeight; return canvas; }
