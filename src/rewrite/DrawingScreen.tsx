@@ -56,6 +56,26 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
   const scheduleAutosave = useCallback(() => { if (autosaveTimerRef.current !== null) window.clearTimeout(autosaveTimerRef.current); setAutosaveState((current) => current === "saving" ? current : "idle"); autosaveTimerRef.current = window.setTimeout(() => { autosaveTimerRef.current = null; void saveSnapshotNow(); }, 500); }, [saveSnapshotNow]);
 
   useEffect(() => {
+    try {
+      const context = new AudioContext();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(1320, context.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.16, context.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.23);
+      window.setTimeout(() => { void context.close().catch(() => {}); }, 400);
+    } catch {
+      // Visual turn indication remains available when browser audio is blocked.
+    }
+  }, [gameId, round]);
+
+  useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return;
     let cancelled = false; setLoadingDrawing(true); setAutosaveState("idle"); setSubmitError(null);
     const surface = new DrawingSurface(canvas, { worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT, map, time });
