@@ -18,47 +18,55 @@ export default function GameAtmosphere({ map, round, overlay = false }: GameAtmo
       {map === "earth" ? (
         <svg className="game-atmosphere__earth-art" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
           <defs>
-            <linearGradient id="earth-ground" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#9ad7c9" /><stop offset=".45" stopColor="#4f8f84" /><stop offset="1" stopColor="#173b47" /></linearGradient>
-            <linearGradient id="earth-mountain" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#718f86" /><stop offset=".5" stopColor="#385f60" /><stop offset="1" stopColor="#173844" /></linearGradient>
-            <linearGradient id="earth-ridge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#b8e1d2" stopOpacity=".75" /><stop offset=".55" stopColor="#6aa99b" stopOpacity=".3" /><stop offset="1" stopColor="#214d55" stopOpacity="0" /></linearGradient>
-            <radialGradient id="earth-light"><stop offset="0" stopColor="#fff8d7" stopOpacity=".95" /><stop offset=".42" stopColor="#ffd78b" stopOpacity=".22" /><stop offset="1" stopColor="#ffd78b" stopOpacity="0" /></radialGradient>
-            <filter id="earth-soft"><feGaussianBlur stdDeviation="14" /></filter>
-            <filter id="earth-wide"><feGaussianBlur stdDeviation="30" /></filter>
+            <linearGradient id="earth-far" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#6f9d91" /><stop offset="1" stopColor="#315c5b" /></linearGradient>
+            <linearGradient id="earth-mid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#527d6d" /><stop offset="1" stopColor="#244b4d" /></linearGradient>
+            <linearGradient id="earth-front" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#6fa77e" /><stop offset="1" stopColor="#183c3e" /></linearGradient>
+            <linearGradient id="earth-water" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a8e5e2" stopOpacity=".9" /><stop offset="1" stopColor="#3d8790" stopOpacity=".25" /></linearGradient>
+            <radialGradient id="earth-sun"><stop offset="0" stopColor="#fffdf0" stopOpacity="1" /><stop offset=".18" stopColor="#ffe9a8" stopOpacity=".86" /><stop offset=".5" stopColor="#ffc978" stopOpacity=".2" /><stop offset="1" stopColor="#ffc978" stopOpacity="0" /></radialGradient>
+            <linearGradient id="earth-ray" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fff0b4" stopOpacity=".18" /><stop offset="1" stopColor="#fff0b4" stopOpacity="0" /></linearGradient>
+            <filter id="earth-blur"><feGaussianBlur stdDeviation="18" /></filter>
+            <filter id="earth-soft"><feGaussianBlur stdDeviation="7" /></filter>
           </defs>
-          <ellipse className="earth-art__light" cx="940" cy="135" rx="290" ry="230" fill="url(#earth-light)" />
-          <path className="earth-art__far" d="M0 585 C120 530 220 540 330 580 C450 622 565 548 690 576 C830 607 970 525 1200 565 V800 H0Z" />
-          <path className="earth-art__mountain" d="M0 650 L128 548 L220 616 L356 448 L520 622 L642 510 L790 630 L928 472 L1088 604 L1200 532 V800 H0Z" />
-          <path className="earth-art__ridge" d="M356 448 L520 622 L642 510 L790 630 L928 472 L1088 604" fill="none" />
-          <path className="earth-art__ground" d="M0 700 C155 658 298 714 450 672 C608 628 748 718 900 676 C1045 636 1130 664 1200 650 V800 H0Z" />
-          <g className="earth-art__terrain-lines" fill="none"><path d="M90 720 C230 685 310 728 420 696" /><path d="M720 704 C835 670 930 694 1055 662" /><path d="M850 760 C960 720 1080 744 1170 710" /></g>
-          <g className="earth-art__mist" filter="url(#earth-soft)"><ellipse cx="170" cy="610" rx="230" ry="38" /><ellipse cx="500" cy="650" rx="280" ry="46" /><ellipse cx="820" cy="620" rx="270" ry="42" /><ellipse cx="1080" cy="600" rx="180" ry="34" /></g>
-          <g className="earth-art__sun-rays" filter="url(#earth-wide)"><path d="M870 60 L1030 60 L820 500 L760 500 Z" /><path d="M1040 90 L1120 140 L920 500 L850 480 Z" /></g>
-          <g className="earth-art__birds"><path d="M155 285 q13 -11 26 0 q13 -11 26 0" /><path d="M250 350 q10 -8 20 0 q10 -8 20 0" /><path d="M835 265 q10 -8 20 0 q10 -8 20 0" /><path d="M945 330 q8 -7 16 0 q8 -7 16 0" /></g>
+          <g className="earth-art__sun"><circle cx="930" cy="125" r="120" fill="url(#earth-sun)" /><circle cx="930" cy="125" r="34" fill="#fff8d6" /></g>
+          <g className="earth-art__rays"><path d="M895 140 L650 610 L720 630 L950 155Z" fill="url(#earth-ray)" /><path d="M960 150 L820 630 L885 630 L1000 155Z" fill="url(#earth-ray)" /></g>
+          <path className="earth-art__far" d="M0 570 C90 530 160 540 245 575 C340 615 430 520 525 565 C635 618 720 535 820 566 C940 602 1050 525 1200 555 V800 H0Z" fill="url(#earth-far)" />
+          <path className="earth-art__far-snow" d="M250 575 L330 518 L392 565 L525 565 L585 530 L645 575" fill="none" />
+          <path className="earth-art__mid" d="M0 650 L120 565 L205 620 L300 495 L405 620 L505 540 L610 635 L730 505 L850 625 L965 520 L1080 610 L1200 545 V800 H0Z" fill="url(#earth-mid)" />
+          <path className="earth-art__mid-light" d="M120 565 L205 620 L300 495 L405 620 M505 540 L610 635 M730 505 L850 625 M965 520 L1080 610" fill="none" />
+          <path className="earth-art__front" d="M0 704 C145 660 260 722 390 685 C540 640 655 735 790 690 C930 644 1040 694 1200 660 V800 H0Z" fill="url(#earth-front)" />
+          <path className="earth-art__river" d="M735 800 C710 758 760 718 815 690 C855 670 875 640 858 606 C900 642 930 680 898 720 C865 762 855 782 870 800Z" fill="url(#earth-water)" />
+          <g className="earth-art__trees">
+            <path d="M90 720 l24 -65 l24 65z" /><path d="M125 730 l30 -82 l30 82z" /><path d="M1060 705 l25 -72 l25 72z" /><path d="M1100 720 l32 -88 l32 88z" /><path d="M1150 730 l22 -62 l22 62z" />
+          </g>
+          <g className="earth-art__mist" filter="url(#earth-blur)"><ellipse cx="180" cy="625" rx="220" ry="34" /><ellipse cx="520" cy="650" rx="300" ry="38" /><ellipse cx="920" cy="625" rx="300" ry="34" /></g>
+          <g className="earth-art__birds"><path d="M170 285 q14 -12 28 0 q14 -12 28 0" /><path d="M290 345 q10 -8 20 0 q10 -8 20 0" /><path d="M785 255 q10 -8 20 0 q10 -8 20 0" /></g>
         </svg>
       ) : (
         <svg className="game-atmosphere__space-art" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
           <defs>
-            <radialGradient id="space-planet" cx="30%" cy="25%"><stop offset="0" stopColor="#f4fdff" /><stop offset=".12" stopColor="#a5e7f7" /><stop offset=".34" stopColor="#4ca9d1" /><stop offset=".58" stopColor="#215c9a" /><stop offset=".82" stopColor="#0c254f" /><stop offset="1" stopColor="#010511" /></radialGradient>
-            <linearGradient id="space-ring" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#8fc8ff" stopOpacity="0" /><stop offset=".2" stopColor="#b8dcff" stopOpacity=".18" /><stop offset=".48" stopColor="#f0f8ff" stopOpacity=".82" /><stop offset=".72" stopColor="#9bc8ef" stopOpacity=".3" /><stop offset="1" stopColor="#8fc8ff" stopOpacity="0" /></linearGradient>
-            <radialGradient id="space-star-glow"><stop offset="0" stopColor="#fff" stopOpacity=".95" /><stop offset=".35" stopColor="#9ed9ff" stopOpacity=".55" /><stop offset="1" stopColor="#9ed9ff" stopOpacity="0" /></radialGradient>
-            <filter id="space-blur"><feGaussianBlur stdDeviation="24" /></filter>
-            <filter id="space-soft"><feGaussianBlur stdDeviation="9" /></filter>
+            <radialGradient id="space-planet" cx="28%" cy="22%"><stop offset="0" stopColor="#f4fdff" /><stop offset=".12" stopColor="#a9e8ff" /><stop offset=".34" stopColor="#4ea8d4" /><stop offset=".62" stopColor="#205a9b" /><stop offset=".84" stopColor="#0b2450" /><stop offset="1" stopColor="#010511" /></radialGradient>
+            <radialGradient id="space-glow"><stop offset="0" stopColor="#86d8ff" stopOpacity=".4" /><stop offset="1" stopColor="#86d8ff" stopOpacity="0" /></radialGradient>
+            <linearGradient id="space-ring" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#8fc8ff" stopOpacity="0" /><stop offset=".22" stopColor="#b8dcff" stopOpacity=".22" /><stop offset=".5" stopColor="#f0f8ff" stopOpacity=".88" /><stop offset=".76" stopColor="#9bc8ef" stopOpacity=".24" /><stop offset="1" stopColor="#8fc8ff" stopOpacity="0" /></linearGradient>
+            <filter id="space-blur"><feGaussianBlur stdDeviation="30" /></filter>
+            <filter id="space-soft"><feGaussianBlur stdDeviation="8" /></filter>
           </defs>
-          <ellipse className="space-art__nebula-a" cx="240" cy="430" rx="300" ry="170" filter="url(#space-blur)" />
-          <ellipse className="space-art__nebula-b" cx="770" cy="185" rx="330" ry="180" filter="url(#space-blur)" />
-          <path className="space-art__nebula-ribbon" d="M-60 575 C190 430 330 590 505 445 S860 250 1260 380" fill="none" stroke="rgba(120,105,255,.18)" strokeWidth="110" filter="url(#space-blur)" />
-          <g className="space-art__starscape"><circle cx="110" cy="105" r="3" /><circle cx="175" cy="225" r="2" /><circle cx="315" cy="92" r="4" /><circle cx="470" cy="180" r="2" /><circle cx="560" cy="95" r="3" /><circle cx="680" cy="300" r="2" /><circle cx="760" cy="105" r="4" /><circle cx="875" cy="365" r="2" /><circle cx="1060" cy="115" r="3" /><circle cx="1140" cy="290" r="2" /><circle cx="520" cy="560" r="3" /><circle cx="300" cy="680" r="2" /></g>
-          <g className="space-art__star-glows"><circle cx="315" cy="92" r="22" fill="url(#space-star-glow)" /><circle cx="760" cy="105" r="25" fill="url(#space-star-glow)" /><circle cx="1060" cy="115" r="20" fill="url(#space-star-glow)" /></g>
-          <g className="space-art__planet-wrap">
-            <ellipse className="space-art__planet-glow" cx="930" cy="245" rx="190" ry="190" />
-            <ellipse className="space-art__ring-back" cx="930" cy="245" rx="230" ry="64" />
-            <circle className="space-art__planet" cx="930" cy="245" r="132" />
-            <g className="space-art__planet-craters"><ellipse cx="870" cy="210" rx="24" ry="14" /><ellipse cx="950" cy="175" rx="18" ry="10" /><ellipse cx="1000" cy="270" rx="30" ry="16" /><ellipse cx="900" cy="315" rx="17" ry="9" /></g>
-            <ellipse className="space-art__planet-shine" cx="895" cy="200" rx="58" ry="34" fill="rgba(255,255,255,.12)" filter="url(#space-soft)" />
-            <ellipse className="space-art__ring-front" cx="930" cy="245" rx="230" ry="64" />
+          <g className="space-art__nebula-shapes" filter="url(#space-blur)"><ellipse cx="180" cy="440" rx="300" ry="145" /><ellipse cx="520" cy="240" rx="270" ry="130" /><ellipse cx="880" cy="600" rx="330" ry="170" /></g>
+          <path className="space-art__nebula-ribbon" d="M-80 610 C180 430 320 610 500 455 S860 250 1280 390" fill="none" stroke="#7c6cff" strokeOpacity=".18" strokeWidth="105" filter="url(#space-blur)" />
+          <g className="space-art__starfield">
+            <circle cx="78" cy="118" r="2" /><circle cx="140" cy="255" r="1.5" /><circle cx="220" cy="88" r="3" /><circle cx="305" cy="180" r="1.5" /><circle cx="380" cy="105" r="2" /><circle cx="450" cy="300" r="1.5" /><circle cx="545" cy="82" r="2.5" /><circle cx="620" cy="170" r="1.5" /><circle cx="710" cy="95" r="3" /><circle cx="800" cy="330" r="1.5" /><circle cx="930" cy="100" r="2" /><circle cx="1080" cy="205" r="1.5" /><circle cx="1140" cy="410" r="2.5" /><circle cx="620" cy="575" r="2" /><circle cx="330" cy="650" r="1.5" /><circle cx="1040" cy="680" r="2" />
           </g>
-          <g className="space-art__constellation"><path d="M115 180 L210 118 L300 160 L380 92 L470 140" /><circle cx="115" cy="180" r="5" /><circle cx="210" cy="118" r="3" /><circle cx="300" cy="160" r="4" /><circle cx="380" cy="92" r="3" /><circle cx="470" cy="140" r="4" /></g>
-          <g className="space-art__debris"><circle cx="610" cy="590" r="5" /><circle cx="650" cy="625" r="3" /><circle cx="700" cy="575" r="4" /><circle cx="742" cy="620" r="2" /><circle cx="785" cy="595" r="3" /></g>
+          <g className="space-art__star-crosses"><path d="M220 88v28 M206 102h28" /><path d="M710 95v32 M694 111h32" /><path d="M930 100v24 M918 112h24" /></g>
+          <g className="space-art__planet-wrap">
+            <ellipse className="space-art__planet-glow" cx="930" cy="255" rx="220" ry="220" fill="url(#space-glow)" />
+            <ellipse className="space-art__ring-back" cx="930" cy="255" rx="245" ry="67" />
+            <circle className="space-art__planet" cx="930" cy="255" r="137" />
+            <g className="space-art__planet-bands"><path d="M820 230 Q930 190 1045 225" /><path d="M810 290 Q930 255 1055 292" /><path d="M845 345 Q930 320 1015 340" /></g>
+            <g className="space-art__planet-craters"><ellipse cx="860" cy="215" rx="25" ry="14" /><ellipse cx="955" cy="178" rx="18" ry="10" /><ellipse cx="1008" cy="278" rx="31" ry="16" /><ellipse cx="895" cy="320" rx="17" ry="9" /></g>
+            <ellipse className="space-art__planet-shine" cx="885" cy="205" rx="58" ry="34" fill="rgba(255,255,255,.14)" filter="url(#space-soft)" />
+            <ellipse className="space-art__ring-front" cx="930" cy="255" rx="245" ry="67" />
+          </g>
+          <g className="space-art__constellation"><path d="M110 190 L200 128 L300 165 L390 100 L480 148" /><circle cx="110" cy="190" r="5" /><circle cx="200" cy="128" r="3" /><circle cx="300" cy="165" r="4" /><circle cx="390" cy="100" r="3" /><circle cx="480" cy="148" r="4" /></g>
+          <g className="space-art__debris"><circle cx="585" cy="610" r="5" /><circle cx="640" cy="650" r="3" /><circle cx="700" cy="600" r="4" /><circle cx="760" cy="655" r="2" /><circle cx="815" cy="620" r="3" /></g>
         </svg>
       )}
       <div className="game-atmosphere__clouds"><i /><i /><i /></div>
