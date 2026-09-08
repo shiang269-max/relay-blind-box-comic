@@ -10,7 +10,7 @@ import DrawingScreen from "./DrawingScreen";
 import ReviewPage from "./pages/ReviewPage";
 import WaitingPage from "./pages/WaitingPage";
 
-interface GameRouterProps { room: RoomState; game: GameState; players: Player[]; submit: (pageDataUrl: string) => Promise<boolean>; roomId: string; playerId: string; playerName: string; onLeaveGame: () => void; }
+interface GameRouterProps { room: RoomState; game: GameState; players: Player[]; submit: (pageDataUrl: string, score?: number) => Promise<boolean>; roomId: string; playerId: string; playerName: string; onLeaveGame: () => void; }
 
 export default function GameRouter({ game, players, submit, roomId, playerId, playerName, onLeaveGame }: GameRouterProps) {
   const [relayPages, setRelayPages] = useState<Record<string, string>>({});
@@ -29,24 +29,24 @@ export default function GameRouter({ game, players, submit, roomId, playerId, pl
   }, [game.completedAt, game.createdAt, game.gameId, game.map, modeId, pages, roomId]);
   const finishGame = useCallback(async () => { await closeCurrentGame(roomId, game.gameId); onLeaveGame(); }, [game.gameId, onLeaveGame, roomId]);
   const leaveGame = useCallback(async () => { await leaveRoom(roomId, playerId); onLeaveGame(); }, [onLeaveGame, playerId, roomId]);
+  const waitingProps = { gameId: game.gameId, playerId, players, round: game.currentTurn, totalRounds: mode.totalRounds, modeLabel: mode.label, currentPlayerName: players.find((player) => player.id === game.currentPlayerId)?.name ?? "等待玩家重新連線", map: game.map };
 
   if (game.phase === "playing") {
     const flow = getGameFlow(modeId);
     if (game.currentPlayerId === playerId) {
-      if (modeId !== "relay-30") return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={game.map} />;
+      if (modeId !== "relay-30") return <WaitingPage {...waitingProps} currentPlayerName="此模式尚未開放" />;
       const previousKey = flow.getPreviousDrawingKey({ currentRound: game.currentTurn, currentPlayerId: game.currentPlayerId, playerIds: game.participantIds });
-      if (previousKey && (!relayPagesLoaded || !pages[previousKey])) return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="正在載入上一頁作品" map={game.map} />;
+      if (previousKey && (!relayPagesLoaded || !pages[previousKey])) return <WaitingPage {...waitingProps} currentPlayerName="正在載入上一頁作品" />;
       return <DrawingScreen key={`${game.gameId}:${game.currentTurn}:${game.currentPlayerId}`} mode={mode} roomId={roomId} gameId={game.gameId} pageIndex={Math.max(0, game.currentTurn - 1)} round={game.currentTurn} playerCount={Math.max(1, game.participantIds.length)} map={game.map} playerName={playerName} previousPage={previousKey ? pages[previousKey] ?? null : null} onSubmit={submit} onLeaveGame={leaveGame} />;
     }
-    const currentPlayer = players.find((player) => player.id === game.currentPlayerId);
-    return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName={currentPlayer?.name ?? "等待玩家重新連線"} map={game.map} />;
+    return <WaitingPage {...waitingProps} />;
   }
 
   if (game.phase === "review") {
-    if (modeId !== "relay-30") return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="此模式尚未開放" map={game.map} />;
-    if (!relayPagesLoaded) return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="正在載入漫畫成果" map={game.map} />;
+    if (modeId !== "relay-30") return <WaitingPage {...waitingProps} currentPlayerName="此模式尚未開放" />;
+    if (!relayPagesLoaded) return <WaitingPage {...waitingProps} currentPlayerName="正在載入漫畫成果" />;
     const comic: Comic = { id: game.savedComicId ?? game.gameId, title: "本局成果", createdAt: game.completedAt ?? game.createdAt, map: game.map, pages };
     return <ReviewPage comic={comic} map={game.map} totalPages={mode.totalRounds ?? 30} onBack={finishGame} onSave={saveComic} />;
   }
-  return <WaitingPage round={game.currentTurn} totalRounds={mode.totalRounds} modeLabel={mode.label} currentPlayerName="等待遊戲狀態" map={game.map} />;
+  return <WaitingPage {...waitingProps} currentPlayerName="等待遊戲狀態" />;
 }
