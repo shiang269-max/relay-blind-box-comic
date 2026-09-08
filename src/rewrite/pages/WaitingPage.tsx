@@ -1,7 +1,18 @@
+import { useEffect, useMemo, useState } from "react";
+import { onValue, push, ref, set } from "firebase/database";
+import { db } from "../../lib/firebase";
 import { getTimeOfDay, type MapType } from "../domain";
+import type { Player } from "../domain";
 import GameAtmosphere from "../visuals/GameAtmosphere";
 
+interface WaitingMessage { id: string; playerId: string; playerName: string; text: string; createdAt: number; }
+interface PageMeta { playerId: string; score: number; }
+interface Nudge { id: string; senderId: string; senderName: string; text: string; createdAt: number; }
+
 interface WaitingPageProps {
+  gameId: string;
+  playerId: string;
+  players: Player[];
   round: number;
   totalRounds: number | null;
   modeLabel: string;
@@ -9,70 +20,157 @@ interface WaitingPageProps {
   map: MapType;
 }
 
-export default function WaitingPage({
-  round,
-  totalRounds,
-  modeLabel,
-  currentPlayerName,
-  map,
-}: WaitingPageProps) {
-  const progress = totalRounds === null
-    ? null
-    : Math.min(100, (round / totalRounds) * 100);
-  const time = getTimeOfDay(round);
+const NUDGE_LINES = [
+  "外面的人已經等到長草了。",
+  "大家都在等你畫完。",
+  "這張圖是要畫到明年嗎？",
+  "下一棒已經準備好了喔。",
+  "你還活著嗎？",
+  "手速呢？",
+];
+
+export default function WaitingPage({ gameId, playerId, players, round, totalRounds, modeLabel, currentPlayerName, map }: WaitingPageProps) {
+  const progress = totalRounds === null ? null : Math.min(100, (round / totalRounds) * 100);
+  const time = getTimeOfDay(round, players.length);
+  const [messages, setMessages] = useState<WaitingMessage[]>([]);
+  const [messageText, setMessageText] = useState("");
+  const [nudge, setNudge] = useState<Nudge | null>(null);
+  const [nudgeSent, setNudgeSent] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [pageScores, setPageScores] = useState<Record<string, PageMeta>>({});
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onValue(ref(db, `waitingMessages/${gameId}`), (snapshot) => {
+      const value = snapshot.val() as Record<string, WaitingMessage> | null;
+      const next = Object.values(value ?? {}).sort((a, b) => a.createdAt - b.createdAt).slice(-24);
+      setMessages(next);
+    });
+    return unsubscribe;
+  }, [gameId]);
+
+  useEffect(() => {
+    const unsubscribe = onValue(ref(db, `relayPageMeta/${gameId}`), (snapshot) => {
+      setPageScores((snapshot.val() as Record<string, PageMeta> | null) ?? {});
+    });
+    return unsubscribe;
+  }, [gameId]);
+
+  useEffect(() => {
+    setNudgeSent(false);
+    setElapsed(0);
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [round, gameId]);
+
+  useEffect(() => {
+    const unsubscribe = onValue(ref(db, `games/${gameId}/nudge`), (snapshot) => {
+      const value = snapshot.val() as Nudge | null;
+      if (!value || value.senderId === playerId || value.createdAt < Date.now() - 30_000) return;
+      setNudge(value);
+      window.setTimeout(() => setNudge(null), 3200);
+    });
+    return unsubscribe;
+  }, [gameId, playerId]);
+
+  useEffect(() => {
+    if (nudgeSent || elapsed < 30) return;
+    // No automatic action: this effect only keeps the button threshold reactive.
+  }, [elapsed, nudgeSent]);
+
+  const currentPlayer = useMemo(() => players.find((player) => player.name === currentPlayerName), [currentPlayerName, players]);
+  const orderedScores = useMemo(() => players.map((player) => {
+    const entries = Object.values(pageScores).filter((item) => item.playerId === player.id);
+    const score = entries.length ? Math.max(...entries.map((item) => item.score)) : 0;
+    return { ...player, score };
+  }), [pageScores, players]);
+
+  const playTurnSound = () => {
+    try {
+      const context = audioContext ?? new AudioContext();
+      setAudioContext(context);
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(1320, context.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.23);
+    } catch {
+      // Audio is optional; visual turn indication remains available.
+    }
+  };
+
+  const sendMessage = async () => {
+    const text = messageText.trim().slice(0, 80);
+    if (!text) return;
+    const messageRef = push(ref(db, `waitingMessages/${gameId}`));
+    await set(messageRef, { id: messageRef.key ?? `${Date.now()}`, playerId, playerName: players.find((player) => player.id === playerId)?.name ?? "玩家", text, createdAt: Date.now() });
+    setMessageText("");
+  };
+
+  const sendNudge = async () => {
+    if (elapsed < 30 || nudgeSent || currentPlayer?.id === playerId) return;
+    setNudgeSent(true);
+    const text = NUDGE_LINES[Math.floor(Math.random() * NUDGE_LINES.length)] ?? NUDGE_LINES[0];
+    await set(ref(db, `games/${gameId}/nudge`), { id: `${playerId}-${Date.now()}`, senderId: playerId, senderName: players.find((player) => player.id === playerId)?.name ?? "玩家", text, createdAt: Date.now() });
+  };
+
+  const isMyTurn = currentPlayer?.id === playerId;
 
   return (
-    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden p-6 text-center text-white">
+    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden p-4 text-center text-white">
       <GameAtmosphere map={map} round={round} />
 
-      <div className="relative z-10 w-full max-w-sm rounded-[2rem] border border-white/15 bg-slate-950/55 p-6 shadow-2xl backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-white/15 bg-white/10 text-3xl shadow-lg">
-          🤫
-        </div>
-        <div className="mt-5 text-[11px] font-black uppercase tracking-[0.28em] text-white/45">
-          Relay In Progress
-        </div>
-        <h2 className="mt-2 text-2xl font-black tracking-tight">等待接力中...</h2>
-        <p className="mt-2 text-sm leading-6 text-white/60">
-          <strong className="text-white">{currentPlayerName}</strong> 正在創作下一段故事
-        </p>
-
-        <div className="mt-7 rounded-2xl border border-white/10 bg-black/15 p-4 text-left">
-          <div className="flex items-center justify-between gap-4 text-xs text-white/50">
-            <span>{modeLabel}</span>
-            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 font-bold text-white/70">
-              {time === "day" ? "DAY" : time === "dusk" ? "DUSK" : "NIGHT"}
-            </span>
+      <div className="relative z-10 w-full max-w-md rounded-[2rem] border border-white/15 bg-slate-950/62 p-5 shadow-2xl backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-3 text-left">
+          <div>
+            <div className="text-[11px] font-black uppercase tracking-[0.25em] text-white/45">Relay In Progress</div>
+            <h2 className="mt-1 text-2xl font-black tracking-tight">{isMyTurn ? "輪到你了" : `${currentPlayerName} 作畫中`}</h2>
           </div>
-          <div className="mt-4 flex items-end justify-between gap-3">
-            <div>
-              <div className="text-3xl font-black tracking-tight">
-                {round}
-                <span className="ml-1 text-base text-white/35">/ {totalRounds ?? "∞"}</span>
+          <div className={`turn-light ${isMyTurn ? "turn-light--active" : ""}`} title={isMyTurn ? "輪到你" : "等待中"} />
+        </div>
+
+        {isMyTurn && <button onClick={playTurnSound} className="mt-3 w-full rounded-xl border border-cyan-200/30 bg-cyan-400/15 px-3 py-2 text-sm font-black text-cyan-100">開始作畫　🔔</button>}
+
+        <div className="mt-4 grid grid-cols-2 gap-2 text-left">
+          {orderedScores.map((player) => (
+            <div key={player.id} className={`rounded-xl border px-3 py-2 ${player.id === currentPlayer?.id ? "border-cyan-300/50 bg-cyan-400/10" : "border-white/10 bg-black/15"}`}>
+              <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                <span className="truncate">{player.name}</span>
+                <span className="text-white/75">{player.score}</span>
               </div>
-              <div className="mt-1 text-xs text-white/45">目前回合</div>
+              <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-white/55 transition-[width]" style={{ width: `${Math.min(100, player.score)}%` }} /></div>
             </div>
-            <div className="text-right text-xs leading-5 text-white/40">
-              {map === "earth" ? "EARTH" : "UNIVERSE"}
-              <br />
-              世界持續變化中
-            </div>
-          </div>
-
-          {progress !== null && (
-            <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-sky-300 via-violet-300 to-pink-300 transition-[width] duration-700 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          )}
+          ))}
         </div>
 
-        <p className="mt-5 text-xs leading-5 text-white/35">
-          防偷看模式已啟用。正在繪製的內容會在完成前保持隱藏。
-        </p>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/15 px-3 py-2 text-xs text-white/55">
+          <span>{modeLabel} · 第 {round}{totalRounds === null ? "" : `/${totalRounds}`} 回合</span>
+          <span>{time === "day" ? "DAY" : time === "dusk" ? "DUSK" : "NIGHT"}</span>
+        </div>
+        {progress !== null && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-sky-300 via-violet-300 to-pink-300 transition-[width] duration-700" style={{ width: `${progress}%` }} /></div>}
+
+        <div className="mt-4 rounded-2xl border border-white/10 bg-black/15 p-3 text-left">
+          <div className="mb-2 flex items-center justify-between"><span className="text-xs font-black text-white/65">路過留言</span><span className="text-[10px] text-white/30">這一局都看得到</span></div>
+          <div className="max-h-28 space-y-1 overflow-y-auto pr-1">
+            {messages.length === 0 ? <div className="py-2 text-xs text-white/30">還沒有人亂講話。</div> : messages.map((message) => <div key={message.id} className="text-xs leading-5"><strong className="text-white/60">{message.playerName}：</strong><span className="text-white/80">{message.text}</span></div>)}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <input value={messageText} maxLength={80} onChange={(event) => setMessageText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void sendMessage(); }} placeholder="留一句話……" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none placeholder:text-white/25 focus:border-cyan-300/40" />
+            <button onClick={() => void sendMessage()} className="rounded-xl bg-white/10 px-3 text-xs font-black">送出</button>
+          </div>
+        </div>
+
+        {!isMyTurn && <button disabled={elapsed < 30 || nudgeSent} onClick={() => void sendNudge()} className="mt-3 w-full rounded-xl border border-amber-200/20 bg-amber-400/10 px-3 py-2 text-xs font-black text-amber-100 disabled:opacity-35">{elapsed < 30 ? `催一下（${30 - elapsed}s）` : nudgeSent ? "已催過" : "催一下"}</button>}
       </div>
+
+      {nudge && <div className="pointer-events-none fixed inset-x-0 top-6 z-50 flex justify-center px-4"><div className="rounded-2xl border border-amber-200/30 bg-slate-950/90 px-5 py-3 text-sm font-black text-amber-100 shadow-2xl backdrop-blur-xl">{nudge.text}</div></div>}
     </div>
   );
 }
