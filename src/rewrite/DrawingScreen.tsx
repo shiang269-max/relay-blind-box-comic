@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { onValue, ref } from "firebase/database";
 import { Check, Eraser, Hand, LogOut, Move, Palette, PenLine, Trash2, Undo2 } from "lucide-react";
+import { db } from "../lib/firebase";
 import { getTimeOfDay, WORLD_HEIGHT, WORLD_WIDTH, type MapType } from "./domain";
 import type { GameMode } from "./game/GameMode";
 import { DrawingSession } from "./drawing/DrawingSession";
@@ -41,6 +43,7 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
   const [loadingDrawing, setLoadingDrawing] = useState(true);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [nudgeText, setNudgeText] = useState<string | null>(null);
 
   const time = getTimeOfDay(round, playerCount);
   const brush = useCallback((): Brush => ({ color, size, eraser }), [color, size, eraser]);
@@ -74,6 +77,16 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
       // Visual turn indication remains available when browser audio is blocked.
     }
   }, [gameId, round]);
+
+  useEffect(() => {
+    const unsubscribe = onValue(ref(db, `games/${gameId}/nudge`), (snapshot) => {
+      const value = snapshot.val() as { senderId?: string; text?: string; createdAt?: number } | null;
+      if (!value?.text || value.senderId === undefined || value.createdAt === undefined || value.createdAt < Date.now() - 30_000) return;
+      setNudgeText(value.text);
+      window.setTimeout(() => setNudgeText(null), 3200);
+    });
+    return unsubscribe;
+  }, [gameId]);
 
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return;
@@ -137,6 +150,8 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
       </div>
       {loadingDrawing && <div className="absolute inset-0 flex items-center justify-center bg-slate-950/35 text-sm font-medium text-white backdrop-blur-sm">載入繪圖資料中...</div>}
     </main>
+
+    {nudgeText && <div className="pointer-events-none fixed inset-x-0 top-20 z-40 flex justify-center px-4"><div className="rounded-2xl border border-amber-200/30 bg-slate-950/90 px-5 py-3 text-sm font-black text-amber-100 shadow-2xl backdrop-blur-xl">{nudgeText}</div></div>}
 
     <section className="relative z-20 shrink-0 border-t border-white/10 bg-slate-950/45 text-white backdrop-blur-xl"><div className="flex min-h-14 items-center gap-2 px-3 py-2">
       <button onClick={() => { setMoveMode((value) => !value); setEraser(false); }} className={`flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${moveMode ? "bg-sky-500 shadow-lg shadow-sky-950/30" : "bg-white/10"}`} title="移動畫布" aria-label="移動畫布"><Move size={20} /></button>
