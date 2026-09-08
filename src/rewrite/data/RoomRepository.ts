@@ -1,4 +1,4 @@
-import { onDisconnect, onValue, push, ref, runTransaction, set, update, type Unsubscribe } from "firebase/database";
+import { onDisconnect, onValue, ref, runTransaction, set, update, type Unsubscribe } from "firebase/database";
 import { db } from "../../lib/firebase";
 import { createDefaultLobbyConfig, generateGameId, getDefaultGameMode, type MapType, type Player, type RoomState } from "../domain";
 import { createGameState, type GameState } from "../game/GameState";
