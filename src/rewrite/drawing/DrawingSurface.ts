@@ -65,17 +65,9 @@ export class DrawingSurface {
   exportPng(): string { this.endStroke(); const scale = Math.min(1, EXPORT_MAX_WIDTH / this.options.worldWidth, EXPORT_MAX_HEIGHT / this.options.worldHeight); const width = Math.max(1, Math.round(this.options.worldWidth * scale)); const height = Math.max(1, Math.round(this.options.worldHeight * scale)); const output = document.createElement("canvas"); output.width = width; output.height = height; const ctx = output.getContext("2d"); if (!ctx) throw new Error("無法建立輸出畫布"); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.clearRect(0, 0, width, height); ctx.drawImage(this.baseCanvas, 0, 0, width, height); ctx.drawImage(this.strokeCanvas, 0, 0, width, height); return output.toDataURL("image/png"); }
   private createWorldCanvas(): HTMLCanvasElement { const canvas = document.createElement("canvas"); canvas.width = this.options.worldWidth; canvas.height = this.options.worldHeight; return canvas; }
   private paintWorldBackground(): void {
-    const ctx = this.worldBackgroundContext;
-    const { worldWidth: width, worldHeight: height, map, time } = this.options;
-    ctx.clearRect(0, 0, width, height);
-    const colors = this.getWorldColors();
-    const sky = ctx.createLinearGradient(0, 0, width, height);
-    sky.addColorStop(0, colors.top); sky.addColorStop(0.45, colors.middle); sky.addColorStop(1, colors.bottom);
-    ctx.fillStyle = sky; ctx.fillRect(0, 0, width, height);
-    if (map === "earth") this.paintEarthBackground(ctx, width, height, time);
-    else this.paintSpaceBackground(ctx, width, height, time);
-    const vignette = ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.1, width * 0.5, height * 0.5, Math.max(width, height) * 0.82);
-    vignette.addColorStop(0, "rgba(0,0,0,0)"); vignette.addColorStop(1, "rgba(2,6,23,0.32)"); ctx.fillStyle = vignette; ctx.fillRect(0, 0, width, height);
+    // The live atmosphere is rendered by GameAtmosphere so it can animate without
+    // forcing the drawing viewport to repaint continuously. Keep this world layer transparent.
+    this.worldBackgroundContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
   }
   private paintEarthBackground(ctx: CanvasRenderingContext2D, width: number, height: number, time: TimeOfDay): void {
     const sunX = width * 0.18, sunY = height * 0.18, sunRadius = Math.min(width, height) * 0.07;
