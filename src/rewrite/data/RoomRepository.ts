@@ -1,10 +1,10 @@
-import { onDisconnect, onValue, ref, runTransaction, set, update, type Unsubscribe } from "firebase/database";
+import { onDisconnect, onValue, push, ref, runTransaction, set, update, type Unsubscribe } from "firebase/database";
 import { db } from "../../lib/firebase";
 import { createDefaultLobbyConfig, generateGameId, getDefaultGameMode, type MapType, type Player, type RoomState } from "../domain";
 import { createGameState, type GameState } from "../game/GameState";
 import type { GameModeId } from "../game/GameMode";
 import { createRelayModeState } from "../game/RelayModeState";
-import { canStartGame, canSubmitRound, cancelClearVote, castClearVote, getHostId, hasClearVotePassed, nextRoundState, orderPlayers, recoverMissingCurrentPlayer, requestClearVote } from "../game/GameRules";
+import { canStartGame, canSubmitRound, cancelClearVote, castClearVote, getHostId, hasClearVotePassed, nextRoundState, recoverMissingCurrentPlayer, requestClearVote } from "../game/GameRules";
 
 const MAX_RELAY_PAGE_BYTES = 8 * 1024 * 1024;
 type WatchErrorCallback = (error: Error) => void;
@@ -50,7 +50,7 @@ export async function startGame(roomId: string, playerId: string, map: MapType, 
   const roomResult = await runTransaction(roomRef(roomId), (rawRoom: RoomState | null) => {
     if (!rawRoom) return rawRoom;
     const room: RoomState = { ...rawRoom, players: normalizePlayers(rawRoom.players), currentGameId: typeof rawRoom.currentGameId === "string" ? rawRoom.currentGameId : null, lobby: rawRoom.lobby ?? createDefaultLobbyConfig(), createdAt: rawRoom.createdAt ?? createdAt };
-    const participantIds = orderPlayers(room.players).map(item => item.id);
+    const participantIds = Object.values(room.players).sort((a, b) => a.joinedAt !== b.joinedAt ? a.joinedAt - b.joinedAt : a.id.localeCompare(b.id)).map(item => item.id);
     const isSoloRestart = participantIds.length === 1 && participantIds[0] === playerId;
     if (!isSoloRestart && !canStartGame(room, playerId)) return room;
     if (!participantIds.length) return room;
@@ -62,9 +62,24 @@ export async function startGame(roomId: string, playerId: string, map: MapType, 
   return gameId;
 }
 export async function closeCurrentGame(roomId: string, gameId: string): Promise<boolean> { const result = await runTransaction(roomRef(roomId), (current: RoomState | null) => current?.currentGameId === gameId ? { ...current, currentGameId: null } satisfies RoomState : current, { applyLocally: false }); return result.committed; }
-export async function submitRound(roomId: string, gameId: string, playerId: string, pageDataUrl: string): Promise<boolean> { if (!pageDataUrl.startsWith("data:image/")) throw new Error("作品格式無效"); if (new TextEncoder().encode(pageDataUrl).byteLength > MAX_RELAY_PAGE_BYTES) throw new Error("作品快照過大"); let accepted = false; let pageKey: string | null = null; const result = await runTransaction(gameRef(gameId), (current: GameState | null) => { if (!current || current.roomId !== roomId || !canSubmitRound(current, playerId) || current.currentTurn < 1) return current; const nextGame = nextRoundState(current); if (!nextGame) return current; accepted = true; pageKey = String(current.currentTurn); return nextGame; }, { applyLocally: false }); if (!accepted || !pageKey) return false; const finalGame = result.snapshot.val() as GameState | null; if (!finalGame || finalGame.roomId !== roomId) return false; await set(ref(db, `relayPages/${gameId}/${pageKey}`), pageDataUrl); return true; }
+export async function submitRound(roomId: string, gameId: string, playerId: string, pageDataUrl: string, score = 0): Promise<boolean> {
+  if (!pageDataUrl.startsWith("data:image/")) throw new Error("作品格式無效");
+  if (new TextEncoder().encode(pageDataUrl).byteLength > MAX_RELAY_PAGE_BYTES) throw new Error("作品快照過大");
+  const normalizedScore = Math.max(0, Math.min(100, Math.round(score)));
+  let accepted = false; let pageKey: string | null = null;
+  const result = await runTransaction(gameRef(gameId), (current: GameState | null) => {
+    if (!current || current.roomId !== roomId || !canSubmitRound(current, playerId) || current.currentTurn < 1) return current;
+    const nextGame = nextRoundState(current); if (!nextGame) return current;
+    accepted = true; pageKey = String(current.currentTurn); return nextGame;
+  }, { applyLocally: false });
+  if (!accepted || !pageKey) return false;
+  const finalGame = result.snapshot.val() as GameState | null; if (!finalGame || finalGame.roomId !== roomId) return false;
+  await set(ref(db, `relayPages/${gameId}/${pageKey}`), pageDataUrl);
+  await set(ref(db, `relayPageMeta/${gameId}/${pageKey}`), { playerId, score: normalizedScore });
+  return true;
+}
 export async function requestPageClearVote(gameId: string, playerId: string): Promise<boolean> { const r = await runTransaction(gameRef(gameId), g => g ? requestClearVote(g, playerId) ?? undefined : undefined, { applyLocally: false }); return r.committed; }
 export async function voteToClearPage(gameId: string, playerId: string): Promise<boolean> { const r = await runTransaction(gameRef(gameId), g => { if (!g || !g.clearVote) return g; const v = castClearVote(g, playerId); return v && hasClearVotePassed(v) ? { ...v, clearVote: null } : v ?? g; }, { applyLocally: false }); return r.committed; }
 export async function cancelPageClearVote(gameId: string, playerId: string): Promise<boolean> { const r = await runTransaction(gameRef(gameId), g => g ? cancelClearVote(g, playerId) ?? undefined : undefined, { applyLocally: false }); return r.committed; }
-export function getOrderedPlayers(room: RoomState | null): Player[] { return orderPlayers(normalizePlayers(room?.players)); }
+export function getOrderedPlayers(room: RoomState | null): Player[] { return Object.values(normalizePlayers(room?.players)).sort((a, b) => a.joinedAt !== b.joinedAt ? a.joinedAt - b.joinedAt : a.id.localeCompare(b.id)); }
 export function isRoomHost(room: RoomState | null, playerId: string): boolean { return getHostId(room ? { ...room, players: normalizePlayers(room.players) } : null) === playerId; }
