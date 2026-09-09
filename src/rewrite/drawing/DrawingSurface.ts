@@ -1,6 +1,7 @@
 import { Camera, type Point } from "./Camera";
 import type { Stroke } from "./Stroke";
 import type { MapType, TimeOfDay } from "../domain";
+import "../visuals/worldCamera.css";
 
 export interface Brush { color: string; size: number; eraser: boolean; }
 export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; }
