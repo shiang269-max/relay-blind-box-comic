@@ -6,7 +6,6 @@ export interface Brush { color: string; size: number; eraser: boolean; }
 export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; }
 const EXPORT_MAX_WIDTH = 1800;
 const EXPORT_MAX_HEIGHT = 2400;
-const WORLD_CAMERA_STYLE_ID = "relay-world-camera-style";
 
 export class DrawingSurface {
   readonly camera: Camera;
@@ -41,7 +40,6 @@ export class DrawingSurface {
     this.strokeContext = stroke;
     this.paintWorldBackground();
     this.camera = new Camera({ width: options.worldWidth, height: options.worldHeight });
-    this.installWorldCameraStyle();
   }
 
   resize(cssWidth: number, cssHeight: number): void {
@@ -119,7 +117,6 @@ export class DrawingSurface {
 
   render(): void {
     this.cancelRender();
-    this.syncWorldCamera();
     const ctx = this.viewportContext;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
@@ -196,42 +193,12 @@ export class DrawingSurface {
   }
 
   /**
-   * The animated world atmosphere owns the visual background. Keep this
+   * The animated world atmosphere now owns the visual background. Keep this
    * layer transparent so it can move independently without entering the
    * interactive drawing render path.
    */
   private paintWorldBackground(): void {
     this.worldBackgroundContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
-  }
-
-  private installWorldCameraStyle(): void {
-    if (document.getElementById(WORLD_CAMERA_STYLE_ID)) return;
-    const style = document.createElement("style");
-    style.id = WORLD_CAMERA_STYLE_ID;
-    style.textContent = `
-      .game-atmosphere--overlay {
-        position: absolute !important;
-        inset: auto !important;
-        left: 0 !important;
-        top: 0 !important;
-        right: auto !important;
-        bottom: auto !important;
-        width: ${this.options.worldWidth}px !important;
-        height: ${this.options.worldHeight}px !important;
-        transform-origin: 0 0 !important;
-        transform: var(--world-camera-transform) !important;
-        will-change: transform;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  private syncWorldCamera(): void {
-    const root = document.documentElement.style;
-    root.setProperty("--world-camera-x", `${this.camera.x}`);
-    root.setProperty("--world-camera-y", `${this.camera.y}`);
-    root.setProperty("--world-camera-zoom", `${this.camera.zoom}`);
-    root.setProperty("--world-camera-transform", `translate3d(${-this.camera.x * this.camera.zoom}px, ${-this.camera.y * this.camera.zoom}px, 0) scale(${this.camera.zoom})`);
   }
 
   private drawStroke(stroke: Stroke): void {
