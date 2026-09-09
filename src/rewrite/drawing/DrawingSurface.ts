@@ -1,7 +1,6 @@
 import { Camera, type Point } from "./Camera";
 import type { Stroke } from "./Stroke";
 import type { MapType, TimeOfDay } from "../domain";
-import "../visuals/worldCamera.css";
 
 export interface Brush { color: string; size: number; eraser: boolean; }
 export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; }
@@ -17,19 +16,16 @@ export class DrawingSurface {
   private readonly strokeCanvas: HTMLCanvasElement;
   private readonly strokeContext: CanvasRenderingContext2D;
   private readonly viewportContext: CanvasRenderingContext2D;
-  private readonly atmosphereRoot: HTMLElement | null;
   private cssWidth = 1;
   private cssHeight = 1;
   private dpr = 1;
   private lastPoint: Point | null = null;
   private renderFrame: number | null = null;
-  private syncedCamera = { x: Number.NaN, y: Number.NaN, zoom: Number.NaN };
 
   constructor(private readonly viewportCanvas: HTMLCanvasElement, private readonly options: SurfaceOptions) {
     const context = viewportCanvas.getContext("2d");
     if (!context) throw new Error("無法建立 viewport context");
     this.viewportContext = context;
-    this.atmosphereRoot = document.querySelector<HTMLElement>(".game-atmosphere--overlay");
     this.worldBackgroundCanvas = this.createWorldCanvas();
     const bg = this.worldBackgroundCanvas.getContext("2d");
     if (!bg) throw new Error("無法建立世界背景 context");
@@ -121,7 +117,6 @@ export class DrawingSurface {
 
   render(): void {
     this.cancelRender();
-    this.syncAtmosphereCamera();
     const ctx = this.viewportContext;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
@@ -139,16 +134,6 @@ export class DrawingSurface {
     ctx.drawImage(this.baseCanvas, 0, 0);
     ctx.drawImage(this.strokeCanvas, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-  }
-
-  private syncAtmosphereCamera(): void {
-    if (!this.atmosphereRoot) return;
-    const { x, y, zoom } = this.camera;
-    if (x === this.syncedCamera.x && y === this.syncedCamera.y && zoom === this.syncedCamera.zoom) return;
-    this.syncedCamera = { x, y, zoom };
-    this.atmosphereRoot.style.setProperty("--camera-zoom", `${zoom}`);
-    this.atmosphereRoot.style.setProperty("--camera-tx", `${-x * zoom}px`);
-    this.atmosphereRoot.style.setProperty("--camera-ty", `${-y * zoom}px`);
   }
 
   private requestRender(): void {
@@ -207,11 +192,6 @@ export class DrawingSurface {
     return canvas;
   }
 
-  /**
-   * The animated world atmosphere owns the visual background. Keep this
-   * layer transparent so it can move independently without entering the
-   * interactive drawing render path.
-   */
   private paintWorldBackground(): void {
     this.worldBackgroundContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
   }
