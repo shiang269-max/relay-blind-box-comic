@@ -1,0 +1,64 @@
+/* Camera-bound world scene: only the visual layers move; weather/vignette stay viewport-bound. */
+.game-atmosphere--overlay {
+  --camera-zoom: 1;
+  --camera-tx: 0px;
+  --camera-ty: 0px;
+}
+
+.game-atmosphere--overlay .game-atmosphere__sky,
+.game-atmosphere--overlay .game-atmosphere__horizon,
+.game-atmosphere--overlay .game-atmosphere__earth-art,
+.game-atmosphere--overlay .game-atmosphere__space-art,
+.game-atmosphere--overlay .game-atmosphere__clouds,
+.game-atmosphere--overlay .game-atmosphere__stars,
+.game-atmosphere--overlay .game-atmosphere__moon,
+.game-atmosphere--overlay .game-atmosphere__sun,
+.game-atmosphere--overlay .game-atmosphere__nebula,
+.game-atmosphere--overlay .game-atmosphere__glow {
+  width: 1800px;
+  height: 2400px;
+  inset: auto;
+  left: 0;
+  top: 0;
+  right: auto;
+  bottom: auto;
+  transform-origin: 0 0;
+  transform: translate3d(var(--camera-tx), var(--camera-ty), 0) scale(var(--camera-zoom));
+  will-change: transform;
+}
+
+.game-atmosphere--overlay .game-atmosphere__horizon {
+  left: -180px;
+  bottom: auto;
+  top: 1450px;
+  width: 2160px;
+  height: 950px;
+}
+
+.game-atmosphere--overlay .game-atmosphere__earth-art,
+.game-atmosphere--overlay .game-atmosphere__space-art {
+  width: 1800px;
+  height: 1200px;
+}
+
+.game-atmosphere--overlay .game-atmosphere__clouds,
+.game-atmosphere--overlay .game-atmosphere__stars,
+.game-atmosphere--overlay .game-atmosphere__nebula,
+.game-atmosphere--overlay .game-atmosphere__glow {
+  overflow: hidden;
+}
+
+.game-atmosphere--overlay .game-atmosphere__sun,
+.game-atmosphere--overlay .game-atmosphere__moon {
+  width: 190px;
+  height: 190px;
+  right: auto;
+  top: 170px;
+  left: 1400px;
+}
+
+.game-atmosphere--overlay .game-atmosphere__vignette,
+.game-atmosphere--overlay .game-atmosphere__rain,
+.game-atmosphere--overlay .game-atmosphere__meteors {
+  z-index: 5;
+}
