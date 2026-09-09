@@ -91,7 +91,7 @@ export default function GameRouter({ game, players, submit, roomId, playerId, pl
         </div>
       );
     }
-    const comic: Comic = { id: game.gameId, title: "本局成果", createdAt: game.completedAt ?? game.createdAt, map: game.map, totalPages: mode.totalRounds ?? 30, pages };
+    const comic: Comic = { id: game.gameId, title: "本局成果", createdAt: game.completedAt ?? game.createdAt, map: game.map, pages };
     return <ReviewPage comic={comic} map={game.map} totalPages={mode.totalRounds ?? 30} onBack={() => { void leaveGame().then(() => setReviewExited(true)); }} onSave={saveComic} />;
   }
   return <WaitingPage {...waitingProps} currentPlayerName="等待遊戲狀態" />;
