@@ -44,7 +44,13 @@ export async function leaveRoom(roomId: string, playerId: string): Promise<boole
   }, { applyLocally: false });
   return result.committed;
 }
-export async function recoverMissingCurrentPlayerTurn(_roomId: string, gameId: string): Promise<boolean> { const result = await runTransaction(gameRef(gameId), (game: GameState | null) => game ? recoverMissingCurrentPlayer(game, new Set<string>()) ?? game : game, { applyLocally: false }); return result.committed; }
+export async function recoverMissingCurrentPlayerTurn(_roomId: string, gameId: string, activePlayerIds: ReadonlySet<string>): Promise<boolean> {
+  const result = await runTransaction(gameRef(gameId), (game: GameState | null) => {
+    if (!game || game.phase !== "playing" || game.currentPlayerId === null || activePlayerIds.has(game.currentPlayerId)) return game;
+    return recoverMissingCurrentPlayer(game, activePlayerIds) ?? game;
+  }, { applyLocally: false });
+  return result.committed;
+}
 export async function startGame(roomId: string, playerId: string, map: MapType, mode: GameModeId = getDefaultGameMode()): Promise<string> {
   const gameId = generateGameId(); const createdAt = Date.now(); let game: GameState | null = null;
   const roomResult = await runTransaction(roomRef(roomId), (rawRoom: RoomState | null) => {
