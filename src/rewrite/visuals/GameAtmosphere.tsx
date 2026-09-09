@@ -18,28 +18,39 @@ export default function GameAtmosphere({ map, round, overlay = false }: GameAtmo
       {map === "earth" ? (
         <svg className="game-atmosphere__earth-art" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
           <defs>
-            <linearGradient id="earth-far" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#6f9d91" /><stop offset="1" stopColor="#315c5b" /></linearGradient>
-            <linearGradient id="earth-mid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#527d6d" /><stop offset="1" stopColor="#244b4d" /></linearGradient>
-            <linearGradient id="earth-front" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#6fa77e" /><stop offset="1" stopColor="#183c3e" /></linearGradient>
-            <linearGradient id="earth-water" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#a8e5e2" stopOpacity=".9" /><stop offset="1" stopColor="#3d8790" stopOpacity=".25" /></linearGradient>
-            <radialGradient id="earth-sun"><stop offset="0" stopColor="#fffdf0" stopOpacity="1" /><stop offset=".18" stopColor="#ffe9a8" stopOpacity=".86" /><stop offset=".5" stopColor="#ffc978" stopOpacity=".2" /><stop offset="1" stopColor="#ffc978" stopOpacity="0" /></radialGradient>
-            <linearGradient id="earth-ray" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fff0b4" stopOpacity=".18" /><stop offset="1" stopColor="#fff0b4" stopOpacity="0" /></linearGradient>
-            <filter id="earth-blur"><feGaussianBlur stdDeviation="18" /></filter>
-            <filter id="earth-soft"><feGaussianBlur stdDeviation="7" /></filter>
+            <linearGradient id="earth-wash" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#d9e2df" stopOpacity=".54" />
+              <stop offset=".56" stopColor="#c9d5d0" stopOpacity=".34" />
+              <stop offset=".78" stopColor="#aebdb6" stopOpacity=".22" />
+              <stop offset="1" stopColor="#6c8079" stopOpacity=".18" />
+            </linearGradient>
+            <linearGradient id="earth-distant" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#81958f" stopOpacity=".58" />
+              <stop offset="1" stopColor="#596c68" stopOpacity=".72" />
+            </linearGradient>
+            <linearGradient id="earth-ground" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#667872" stopOpacity=".22" />
+              <stop offset="1" stopColor="#354944" stopOpacity=".5" />
+            </linearGradient>
+            <radialGradient id="earth-light">
+              <stop offset="0" stopColor="#fff8dc" stopOpacity=".72" />
+              <stop offset=".28" stopColor="#f5e6bc" stopOpacity=".22" />
+              <stop offset="1" stopColor="#f5e6bc" stopOpacity="0" />
+            </radialGradient>
+            <filter id="earth-soft"><feGaussianBlur stdDeviation="12" /></filter>
           </defs>
-          <g className="earth-art__sun"><circle cx="930" cy="125" r="120" fill="url(#earth-sun)" /><circle cx="930" cy="125" r="34" fill="#fff8d6" /></g>
-          <g className="earth-art__rays"><path d="M895 140 L650 610 L720 630 L950 155Z" fill="url(#earth-ray)" /><path d="M960 150 L820 630 L885 630 L1000 155Z" fill="url(#earth-ray)" /></g>
-          <path className="earth-art__far" d="M0 570 C90 530 160 540 245 575 C340 615 430 520 525 565 C635 618 720 535 820 566 C940 602 1050 525 1200 555 V800 H0Z" fill="url(#earth-far)" />
-          <path className="earth-art__far-snow" d="M250 575 L330 518 L392 565 L525 565 L585 530 L645 575" fill="none" />
-          <path className="earth-art__mid" d="M0 650 L120 565 L205 620 L300 495 L405 620 L505 540 L610 635 L730 505 L850 625 L965 520 L1080 610 L1200 545 V800 H0Z" fill="url(#earth-mid)" />
-          <path className="earth-art__mid-light" d="M120 565 L205 620 L300 495 L405 620 M505 540 L610 635 M730 505 L850 625 M965 520 L1080 610" fill="none" />
-          <path className="earth-art__front" d="M0 704 C145 660 260 722 390 685 C540 640 655 735 790 690 C930 644 1040 694 1200 660 V800 H0Z" fill="url(#earth-front)" />
-          <path className="earth-art__river" d="M735 800 C710 758 760 718 815 690 C855 670 875 640 858 606 C900 642 930 680 898 720 C865 762 855 782 870 800Z" fill="url(#earth-water)" />
-          <g className="earth-art__trees">
-            <path d="M90 720 l24 -65 l24 65z" /><path d="M125 730 l30 -82 l30 82z" /><path d="M1060 705 l25 -72 l25 72z" /><path d="M1100 720 l32 -88 l32 88z" /><path d="M1150 730 l22 -62 l22 62z" />
-          </g>
-          <g className="earth-art__mist" filter="url(#earth-blur)"><ellipse cx="180" cy="625" rx="220" ry="34" /><ellipse cx="520" cy="650" rx="300" ry="38" /><ellipse cx="920" cy="625" rx="300" ry="34" /></g>
-          <g className="earth-art__birds"><path d="M170 285 q14 -12 28 0 q14 -12 28 0" /><path d="M290 345 q10 -8 20 0 q10 -8 20 0" /><path d="M785 255 q10 -8 20 0 q10 -8 20 0" /></g>
+
+          {/* The sky stays visually open; the landscape begins very low on the horizon. */}
+          <rect width="1200" height="800" fill="url(#earth-wash)" />
+          <circle className="earth-art__sun" cx="930" cy="135" r="118" fill="url(#earth-light)" />
+
+          <path className="earth-art__far" d="M0 602 C90 588 155 600 230 595 C320 588 372 552 445 578 C520 605 588 592 662 580 C744 566 805 586 874 574 C972 557 1056 580 1200 562 V800 H0Z" fill="url(#earth-distant)" />
+          <path className="earth-art__mid" d="M0 653 C118 628 205 645 300 630 C400 614 480 635 570 622 C670 607 742 636 835 620 C940 602 1035 624 1200 610 V800 H0Z" fill="url(#earth-ground)" />
+          <path className="earth-art__front" d="M0 716 C160 690 278 708 400 696 C555 681 668 709 810 694 C960 678 1070 700 1200 682 V800 H0Z" fill="rgba(45,62,58,.3)" />
+
+          <path className="earth-art__mist" d="M0 610 C180 588 330 626 505 602 C680 578 820 615 1000 592 C1080 582 1140 586 1200 580" fill="none" stroke="rgba(236,241,236,.34)" strokeWidth="24" strokeLinecap="round" filter="url(#earth-soft)" />
+          <path className="earth-art__mist" d="M0 648 C180 632 330 660 520 638 C700 617 870 651 1200 625" fill="none" stroke="rgba(231,239,234,.18)" strokeWidth="18" strokeLinecap="round" filter="url(#earth-soft)" />
+          <path className="earth-art__horizon-line" d="M0 604 C180 588 340 608 520 596 C700 584 900 602 1200 574" fill="none" stroke="rgba(232,238,234,.26)" strokeWidth="3" />
         </svg>
       ) : (
         <svg className="game-atmosphere__space-art" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
