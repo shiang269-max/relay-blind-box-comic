@@ -43,12 +43,22 @@ export function generateComicId(): string { return generateId(16); }
 export function getDefaultGameMode(): GameModeId { return DEFAULT_GAME_MODE; }
 export function createDefaultLobbyConfig(): LobbyConfig { return { selectedMode: DEFAULT_GAME_MODE, selectedMap: "earth" }; }
 
+/**
+ * Coarse compatibility state used by existing UI classes. The actual atmosphere
+ * now also receives the continuous progress from getWorldTimeProgress().
+ */
 export function getTimeOfDay(round: number, participantCount = 1): TimeOfDay {
   const turnsPerPhase = Math.max(1, Math.floor(participantCount));
   const phaseIndex = Math.floor(Math.max(0, round - 1) / turnsPerPhase) % 3;
   if (phaseIndex === 0) return "day";
   if (phaseIndex === 1) return "dusk";
   return "night";
+}
+
+/** 0..1 across the complete game, independent of player count. */
+export function getWorldTimeProgress(round: number): number {
+  if (TOTAL_ROUNDS <= 1) return 1;
+  return Math.max(0, Math.min(1, (Math.max(1, round) - 1) / (TOTAL_ROUNDS - 1)));
 }
 
 export function getBackgroundColor(map: MapType, time: TimeOfDay): string {
