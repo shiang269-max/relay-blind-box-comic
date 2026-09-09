@@ -219,7 +219,7 @@ export class DrawingSurface {
         width: ${this.options.worldWidth}px !important;
         height: ${this.options.worldHeight}px !important;
         transform-origin: 0 0 !important;
-        transform: translate3d(calc(-1px * var(--world-camera-x) * var(--world-camera-zoom)), calc(-1px * var(--world-camera-y) * var(--world-camera-zoom)), 0) scale(var(--world-camera-zoom)) !important;
+        transform: var(--world-camera-transform) !important;
         will-change: transform;
       }
     `;
@@ -231,6 +231,7 @@ export class DrawingSurface {
     root.setProperty("--world-camera-x", `${this.camera.x}`);
     root.setProperty("--world-camera-y", `${this.camera.y}`);
     root.setProperty("--world-camera-zoom", `${this.camera.zoom}`);
+    root.setProperty("--world-camera-transform", `translate3d(${-this.camera.x * this.camera.zoom}px, ${-this.camera.y * this.camera.zoom}px, 0) scale(${this.camera.zoom})`);
   }
 
   private drawStroke(stroke: Stroke): void {
