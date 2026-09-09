@@ -1,4 +1,4 @@
-import { getTimeOfDay, type MapType } from "../domain";
+import { getTimeOfDay, getWorldTimeProgress, type MapType } from "../domain";
 
 interface GameAtmosphereProps {
   map: MapType;
@@ -6,17 +6,84 @@ interface GameAtmosphereProps {
   overlay?: boolean;
 }
 
+const EARTH_TIME_STOPS = [
+  { at: 0, top: "#9cc9d2", mid: "#c8d9d2", bottom: "#718a82" },
+  { at: 0.2, top: "#9fcfdf", mid: "#d4dfd8", bottom: "#7f958b" },
+  { at: 0.4, top: "#a7d1d2", mid: "#d7ddd2", bottom: "#83958a" },
+  { at: 0.58, top: "#d6b6a1", mid: "#d8b2a0", bottom: "#706776" },
+  { at: 0.76, top: "#5b7294", mid: "#394e6b", bottom: "#1b293d" },
+  { at: 1, top: "#172844", mid: "#0d182b", bottom: "#050a12" },
+];
+
+const RAIN_PARTICLES = Array.from({ length: 34 }, (_, index) => ({
+  left: `${(index * 37) % 109 - 4}%`,
+  top: `${-18 - ((index * 23) % 72)}%`,
+  height: `${16 + ((index * 11) % 15)}px`,
+  duration: `${1.55 + ((index * 17) % 90) / 100}s`,
+  delay: `${-((index * 29) % 170) / 100}s`,
+  opacity: `${0.12 + ((index * 13) % 18) / 100}`,
+  drift: `${12 + ((index * 7) % 18)}px`,
+}));
+
+function mixColor(from: string, to: string, amount: number): string {
+  const a = from.match(/[\da-f]{2}/gi);
+  const b = to.match(/[\da-f]{2}/gi);
+  if (!a || !b) return from;
+  const channels = a.map((value, index) => Math.round(parseInt(value, 16) + (parseInt(b[index], 16) - parseInt(value, 16)) * amount));
+  return `#${channels.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function getEarthSky(progress: number): { top: string; mid: string; bottom: string } {
+  const clamped = Math.max(0, Math.min(1, progress));
+  for (let index = 1; index < EARTH_TIME_STOPS.length; index += 1) {
+    const next = EARTH_TIME_STOPS[index];
+    const previous = EARTH_TIME_STOPS[index - 1];
+    if (clamped <= next.at) {
+      const span = next.at - previous.at || 1;
+      const amount = (clamped - previous.at) / span;
+      return {
+        top: mixColor(previous.top, next.top, amount),
+        mid: mixColor(previous.mid, next.mid, amount),
+        bottom: mixColor(previous.bottom, next.bottom, amount),
+      };
+    }
+  }
+  return EARTH_TIME_STOPS[EARTH_TIME_STOPS.length - 1];
+}
+
 /** Decorative atmosphere only. It never participates in canvas input or drawing coordinates. */
 export default function GameAtmosphere({ map, round, overlay = false }: GameAtmosphereProps) {
   const time = getTimeOfDay(round);
+  const worldTime = getWorldTimeProgress(round);
   const progressed = round >= 2;
+  const earthSky = getEarthSky(worldTime);
+  const rainStrength = map === "earth" ? Math.max(0, Math.min(1, (worldTime - 0.2) / 0.35)) : 0;
+  const earthFilter = worldTime > 0.62 ? `brightness(${1 - (worldTime - 0.62) * 0.48}) saturate(${1 - (worldTime - 0.62) * 0.22})` : undefined;
 
   return (
     <div className={`game-atmosphere game-atmosphere--${map} game-atmosphere--${time} ${progressed ? "game-atmosphere--progressed" : ""} ${overlay ? "game-atmosphere--overlay" : ""}`} aria-hidden="true">
-      <div className="game-atmosphere__sky" />
+      <style>{`
+        .game-atmosphere__rain-particle {
+          position: absolute;
+          display: block;
+          width: 1px;
+          border-radius: 999px;
+          background: linear-gradient(180deg, transparent, rgba(232,247,255,.72) 38%, rgba(196,229,241,.2));
+          transform: translate3d(0, 0, 0) rotate(11deg);
+          animation: real-rain-fall var(--rain-duration) linear var(--rain-delay) infinite;
+          opacity: var(--rain-opacity);
+          filter: blur(.15px);
+          will-change: transform;
+        }
+        @keyframes real-rain-fall {
+          0% { transform: translate3d(0, -12vh, 0) rotate(11deg); }
+          100% { transform: translate3d(var(--rain-drift), 125vh, 0) rotate(11deg); }
+        }
+      `}</style>
+      <div className="game-atmosphere__sky" style={map === "earth" ? { background: `linear-gradient(180deg, ${earthSky.top} 0%, ${earthSky.mid} 48%, ${earthSky.bottom} 100%)`, transition: "background 5s ease" } : undefined} />
       <div className="game-atmosphere__horizon" />
       {map === "earth" ? (
-        <svg className="game-atmosphere__earth-art" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+        <svg className="game-atmosphere__earth-art" style={{ filter: earthFilter }} viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
           <defs>
             <linearGradient id="earth-wash" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stopColor="#d9e2df" stopOpacity=".54" />
@@ -40,14 +107,11 @@ export default function GameAtmosphere({ map, round, overlay = false }: GameAtmo
             <filter id="earth-soft"><feGaussianBlur stdDeviation="12" /></filter>
           </defs>
 
-          {/* The sky stays visually open; the landscape begins very low on the horizon. */}
           <rect width="1200" height="800" fill="url(#earth-wash)" />
           <circle className="earth-art__sun" cx="930" cy="135" r="118" fill="url(#earth-light)" />
-
           <path className="earth-art__far" d="M0 602 C90 588 155 600 230 595 C320 588 372 552 445 578 C520 605 588 592 662 580 C744 566 805 586 874 574 C972 557 1056 580 1200 562 V800 H0Z" fill="url(#earth-distant)" />
           <path className="earth-art__mid" d="M0 653 C118 628 205 645 300 630 C400 614 480 635 570 622 C670 607 742 636 835 620 C940 602 1035 624 1200 610 V800 H0Z" fill="url(#earth-ground)" />
           <path className="earth-art__front" d="M0 716 C160 690 278 708 400 696 C555 681 668 709 810 694 C960 678 1070 700 1200 682 V800 H0Z" fill="rgba(45,62,58,.3)" />
-
           <path className="earth-art__mist" d="M0 610 C180 588 330 626 505 602 C680 578 820 615 1000 592 C1080 582 1140 586 1200 580" fill="none" stroke="rgba(236,241,236,.34)" strokeWidth="24" strokeLinecap="round" filter="url(#earth-soft)" />
           <path className="earth-art__mist" d="M0 648 C180 632 330 660 520 638 C700 617 870 651 1200 625" fill="none" stroke="rgba(231,239,234,.18)" strokeWidth="18" strokeLinecap="round" filter="url(#earth-soft)" />
           <path className="earth-art__horizon-line" d="M0 604 C180 588 340 608 520 596 C700 584 900 602 1200 574" fill="none" stroke="rgba(232,238,234,.26)" strokeWidth="3" />
@@ -87,7 +151,25 @@ export default function GameAtmosphere({ map, round, overlay = false }: GameAtmo
       <div className="game-atmosphere__nebula" />
       <div className="game-atmosphere__glow" />
       <div className="game-atmosphere__vignette" />
-      <div className="game-atmosphere__rain" />
+      {map === "earth" && rainStrength > 0 ? (
+        <div className="game-atmosphere__rain" style={{ opacity: 0.12 * rainStrength }}>
+          {RAIN_PARTICLES.map((particle, index) => (
+            <i
+              key={index}
+              className="game-atmosphere__rain-particle"
+              style={{
+                left: particle.left,
+                top: particle.top,
+                height: particle.height,
+                ["--rain-duration" as string]: particle.duration,
+                ["--rain-delay" as string]: particle.delay,
+                ["--rain-opacity" as string]: particle.opacity,
+                ["--rain-drift" as string]: particle.drift,
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
       <div className="game-atmosphere__meteors"><i /><i /><i /></div>
     </div>
   );
