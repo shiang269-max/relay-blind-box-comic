@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MapType, RoomState } from "./domain";
 import type { GameState } from "./game/GameState";
-import { getOrderedPlayers, isRoomHost, leaveRoom, startGame, startPlayerPresence, submitRound, touchPlayer, upsertPlayer, watchGame, watchRoom } from "./data/RoomRepository";
+import { getOrderedPlayers, isRoomHost, leaveRoom, recoverMissingCurrentPlayerTurn, startGame, startPlayerPresence, submitRound, touchPlayer, upsertPlayer, watchGame, watchRoom } from "./data/RoomRepository";
 
 const ROOM_LOAD_TIMEOUT_MS = 8_000;
 const PLAYER_HEARTBEAT_MS = 10_000;
@@ -37,6 +37,14 @@ export function useRoom(session: RoomSession) {
   }, [session.enabled, session.playerId, session.playerName, session.roomId]);
 
   useEffect(() => { if (!session.enabled) { setGame(null); return; } const gameId = room?.currentGameId; if (!gameId) { setGame(null); return; } setGame(null); return watchGame(gameId, setGame, (nextError) => setError(toFirebaseErrorMessage(nextError))); }, [room?.currentGameId, session.enabled]);
+
+  useEffect(() => {
+    if (!session.enabled || !game || game.phase !== "playing" || game.currentPlayerId === null) return;
+    const activePlayerIds = new Set(getOrderedPlayers(room).map((player) => player.id));
+    if (activePlayerIds.has(game.currentPlayerId)) return;
+    void recoverMissingCurrentPlayerTurn(session.roomId, game.gameId, activePlayerIds).catch((nextError) => console.error("回合玩家離線恢復失敗", nextError));
+  }, [game, room, session.enabled, session.roomId]);
+
   useEffect(() => { if (!session.enabled || loading || error || !room) return; const heartbeatId = window.setInterval(() => { void touchPlayer(session.roomId, session.playerId).catch(() => {}); }, PLAYER_HEARTBEAT_MS); return () => window.clearInterval(heartbeatId); }, [error, loading, room, session.enabled, session.playerId, session.roomId]);
 
   const players = useMemo(() => getOrderedPlayers(room), [room]);
