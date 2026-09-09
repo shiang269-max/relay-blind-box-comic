@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ref, set } from "firebase/database";
+import { onValue, ref, set } from "firebase/database";
 import { db } from "../lib/firebase";
 import { generateComicId, type Comic, type Player, type RoomState } from "./domain";
 import { leaveRoom, watchRelayPages } from "./data/RoomRepository";
@@ -20,8 +20,26 @@ export default function GameRouter({ game, players, submit, roomId, playerId, pl
   useEffect(() => {
     setRelayPages({});
     setRelayPagesLoaded(false);
-    return watchRelayPages(game.gameId, (nextPages) => { setRelayPages(nextPages); setRelayPagesLoaded(true); });
-  }, [game.gameId]);
+    const flow = getGameFlow(game.mode);
+    const previousKey = game.phase === "playing" && game.currentPlayerId === playerId
+      ? flow.getPreviousDrawingKey({ currentRound: game.currentTurn, currentPlayerId: game.currentPlayerId, playerIds: game.participantIds })
+      : null;
+
+    if (game.phase === "review") {
+      return watchRelayPages(game.gameId, (nextPages) => { setRelayPages(nextPages); setRelayPagesLoaded(true); });
+    }
+
+    if (!previousKey) {
+      setRelayPagesLoaded(true);
+      return;
+    }
+
+    return onValue(ref(db, `relayPages/${game.gameId}/${previousKey}`), (snapshot) => {
+      const page = snapshot.val();
+      setRelayPages(page && typeof page === "string" ? { [previousKey]: page } : {});
+      setRelayPagesLoaded(true);
+    });
+  }, [game.currentPlayerId, game.currentTurn, game.gameId, game.mode, game.participantIds, game.phase, playerId]);
 
   useEffect(() => {
     if (game.phase !== "review") setReviewExited(false);
@@ -73,7 +91,7 @@ export default function GameRouter({ game, players, submit, roomId, playerId, pl
         </div>
       );
     }
-    const comic: Comic = { id: game.gameId, title: "本局成果", createdAt: game.completedAt ?? game.createdAt, map: game.map, pages };
+    const comic: Comic = { id: game.gameId, title: "本局成果", createdAt: game.completedAt ?? game.createdAt, map: game.map, totalPages: mode.totalRounds ?? 30, pages };
     return <ReviewPage comic={comic} map={game.map} totalPages={mode.totalRounds ?? 30} onBack={() => { void leaveGame().then(() => setReviewExited(true)); }} onSave={saveComic} />;
   }
   return <WaitingPage {...waitingProps} currentPlayerName="等待遊戲狀態" />;
