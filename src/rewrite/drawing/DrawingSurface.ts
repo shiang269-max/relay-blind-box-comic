@@ -7,7 +7,7 @@ export interface Brush { color: string; size: number; eraser: boolean; }
 export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; round?: number; }
 const EXPORT_MAX_WIDTH = 1800;
 const EXPORT_MAX_HEIGHT = 2400;
-const WORLD_ANIMATION_INTERVAL = 150;
+const WORLD_ANIMATION_INTERVAL = 180;
 
 export class DrawingSurface {
   readonly camera: Camera;
@@ -25,9 +25,10 @@ export class DrawingSurface {
   private lastPoint: Point | null = null;
   private renderFrame: number | null = null;
   private animationTimer: number | null = null;
+  private drawing = false;
 
   constructor(private readonly viewportCanvas: HTMLCanvasElement, private readonly options: SurfaceOptions) {
-    const context = viewportCanvas.getContext("2d");
+    const context = viewportCanvas.getContext("2d", { alpha: false });
     if (!context) throw new Error("無法建立 viewport context");
     this.viewportContext = context;
     this.worldBackgroundCanvas = this.createWorldCanvas();
@@ -75,6 +76,7 @@ export class DrawingSurface {
 
   startStroke(point: Point, brush: Brush): boolean {
     if (!this.camera.isInsideWorld(point)) return false;
+    this.drawing = true;
     this.lastPoint = point;
     this.drawDot(point, brush);
     this.render();
@@ -89,6 +91,7 @@ export class DrawingSurface {
   }
 
   endStroke(): void {
+    this.drawing = false;
     this.lastPoint = null;
     this.cancelRender();
     this.render();
@@ -122,22 +125,32 @@ export class DrawingSurface {
   }
 
   render(): void {
-    this.cancelRender();
     const ctx = this.viewportContext;
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
+    const dpr = this.dpr;
+    const zoom = this.camera.zoom;
+
+    // Always paint the viewport first. This removes the transparent letterbox that
+    // previously exposed the page's white background at minimum zoom.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = this.options.map === "space" ? "#030711" : "#dce8e2";
+    ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
+
     ctx.setTransform(
-      this.dpr * this.camera.zoom,
+      dpr * zoom,
       0,
       0,
-      this.dpr * this.camera.zoom,
-      -this.camera.x * this.dpr * this.camera.zoom,
-      -this.camera.y * this.dpr * this.camera.zoom,
+      dpr * zoom,
+      -this.camera.x * dpr * zoom,
+      -this.camera.y * dpr * zoom,
     );
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "medium";
     ctx.drawImage(this.worldBackgroundCanvas, 0, 0);
-    this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
+
+    // Dynamic world motion is intentionally absent while drawing. Pointer input
+    // owns the render budget; animation resumes immediately after the stroke ends.
+    if (!this.drawing) this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
+
     ctx.drawImage(this.baseCanvas, 0, 0);
     ctx.drawImage(this.strokeCanvas, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -161,13 +174,14 @@ export class DrawingSurface {
     const tick = () => {
       this.animationTimer = null;
       if (!this.viewportCanvas.isConnected) return;
-      if (document.visibilityState !== "hidden") this.render();
+      if (!this.drawing && document.visibilityState !== "hidden") this.render();
       this.animationTimer = window.setTimeout(tick, WORLD_ANIMATION_INTERVAL);
     };
     this.animationTimer = window.setTimeout(tick, WORLD_ANIMATION_INTERVAL);
   }
 
   destroy(): void {
+    this.drawing = false;
     this.lastPoint = null;
     this.cancelRender();
     if (this.animationTimer !== null) {
@@ -236,7 +250,7 @@ export class DrawingSurface {
   private drawDot(point: Point, brush: Brush): void {
     this.configureBrush(brush);
     this.strokeContext.beginPath();
-    this.strokeContext.arc(point.x, point.y, brush.size / 2, 0, Math.PI * 2);
+    this.strokeContext.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
     this.strokeContext.fill();
   }
 
