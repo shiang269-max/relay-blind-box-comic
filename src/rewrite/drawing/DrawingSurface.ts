@@ -218,3 +218,33 @@ export class DrawingSurface {
     if (!first) return;
     this.drawDot(first, stroke.brush);
     let previous = first;
+    for (const point of rest) {
+      this.drawSegment(previous, point, stroke.brush);
+      previous = point;
+    }
+  }
+
+  private drawDot(point: Point, brush: Brush): void {
+    this.configureBrush(brush);
+    this.strokeContext.beginPath();
+    this.strokeContext.arc(point.x, point.y, brush.size / 2, 0, Math.PI * 2);
+    this.strokeContext.fill();
+  }
+
+  private drawSegment(from: Point, to: Point, brush: Brush): void {
+    this.configureBrush(brush);
+    this.strokeContext.beginPath();
+    this.strokeContext.moveTo(from.x, from.y);
+    this.strokeContext.lineTo(to.x, to.y);
+    this.strokeContext.stroke();
+  }
+
+  private configureBrush(brush: Brush): void {
+    this.strokeContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
+    this.strokeContext.strokeStyle = brush.color;
+    this.strokeContext.fillStyle = brush.color;
+    this.strokeContext.lineWidth = brush.size;
+    this.strokeContext.lineCap = "round";
+    this.strokeContext.lineJoin = "round";
+  }
+}
