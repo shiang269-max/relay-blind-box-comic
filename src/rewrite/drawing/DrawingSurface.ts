@@ -167,6 +167,15 @@ export class DrawingSurface {
     this.animationTimer = window.setTimeout(tick, WORLD_ANIMATION_INTERVAL);
   }
 
+  destroy(): void {
+    this.lastPoint = null;
+    this.cancelRender();
+    if (this.animationTimer !== null) {
+      window.clearTimeout(this.animationTimer);
+      this.animationTimer = null;
+    }
+  }
+
   getStrokeCoverageScore(): number {
     const step = 6;
     const width = this.options.worldWidth;
