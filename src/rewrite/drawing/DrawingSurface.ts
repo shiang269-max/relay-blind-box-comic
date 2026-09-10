@@ -7,8 +7,7 @@ export interface Brush { color: string; size: number; eraser: boolean; }
 export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; round?: number; }
 const EXPORT_MAX_WIDTH = 1800;
 const EXPORT_MAX_HEIGHT = 2400;
-const WORLD_ANIMATION_INTERVAL = 180;
-const MIN_PREVIEW_DISTANCE = 0.35;
+const WORLD_ANIMATION_INTERVAL = 120;
 
 export class DrawingSurface {
   readonly camera: Camera;
@@ -23,15 +22,10 @@ export class DrawingSurface {
   private cssWidth = 1;
   private cssHeight = 1;
   private dpr = 1;
-  private viewportLeft = 0;
-  private viewportTop = 0;
-  private viewportCssWidth = 1;
-  private viewportCssHeight = 1;
   private lastPoint: Point | null = null;
   private renderFrame: number | null = null;
   private animationTimer: number | null = null;
   private destroyed = false;
-  private interactionActive = false;
 
   constructor(private readonly viewportCanvas: HTMLCanvasElement, private readonly options: SurfaceOptions) {
     const context = viewportCanvas.getContext("2d", { alpha: false });
@@ -60,12 +54,8 @@ export class DrawingSurface {
     const nextWidth = Math.max(1, Math.round(cssWidth));
     const nextHeight = Math.max(1, Math.round(cssHeight));
     const nextDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-    const rect = this.viewportCanvas.getBoundingClientRect();
-    this.viewportLeft = rect.left;
-    this.viewportTop = rect.top;
-    this.viewportCssWidth = Math.max(1, rect.width);
-    this.viewportCssHeight = Math.max(1, rect.height);
     if (nextWidth === this.cssWidth && nextHeight === this.cssHeight && nextDpr === this.dpr) return;
+
     this.cancelRender();
     this.cssWidth = nextWidth;
     this.cssHeight = nextHeight;
@@ -79,44 +69,38 @@ export class DrawingSurface {
   }
 
   eventToScreen(event: PointerEvent | WheelEvent): Point {
+    const rect = this.viewportCanvas.getBoundingClientRect();
     return {
-      x: (event.clientX - this.viewportLeft) * this.cssWidth / this.viewportCssWidth,
-      y: (event.clientY - this.viewportTop) * this.cssHeight / this.viewportCssHeight,
+      x: (event.clientX - rect.left) * this.cssWidth / Math.max(1, rect.width),
+      y: (event.clientY - rect.top) * this.cssHeight / Math.max(1, rect.height),
     };
   }
 
-  eventToWorld(event: PointerEvent): Point { return this.camera.screenToWorld(this.eventToScreen(event)); }
-
-  setInteractionActive(active: boolean): void {
-    if (this.destroyed) return;
-    this.interactionActive = active;
-    if (active) this.cancelRender();
+  eventToWorld(event: PointerEvent): Point {
+    return this.camera.screenToWorld(this.eventToScreen(event));
   }
 
   startStroke(point: Point, brush: Brush): boolean {
     if (!this.camera.isInsideWorld(point)) return false;
-    this.interactionActive = true;
     this.lastPoint = point;
     this.drawDot(point, brush);
-    if (!brush.eraser) this.drawDotToViewport(point, brush);
-    else this.requestRender();
+    this.cancelRender();
+    this.render();
     return true;
   }
 
   continueStroke(point: Point, brush: Brush): void {
     if (!this.lastPoint) return;
     const from = this.lastPoint;
-    const distance = Math.hypot(point.x - from.x, point.y - from.y);
-    if (distance < MIN_PREVIEW_DISTANCE) return;
     this.drawSegment(from, point, brush);
     this.lastPoint = point;
+
     if (!brush.eraser) this.drawSegmentToViewport(from, point, brush);
     else this.requestRender();
   }
 
   endStroke(): void {
     this.lastPoint = null;
-    this.interactionActive = false;
     this.cancelRender();
     this.render();
   }
@@ -153,21 +137,30 @@ export class DrawingSurface {
     const ctx = this.viewportContext;
     const dpr = this.dpr;
     const zoom = this.camera.zoom;
+
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = this.options.map === "space" ? "#030711" : "#cbd8d2";
     ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
+
     const view = this.getVisibleWorldRect();
     this.drawWorldLayer(this.worldBackgroundCanvas, view);
-    if (!this.interactionActive) {
-      ctx.save();
-      ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, -this.camera.x * dpr * zoom, -this.camera.y * dpr * zoom);
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "medium";
-      this.clipWorldViewport(ctx, view);
-      this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
-      ctx.restore();
-    }
+
+    ctx.save();
+    ctx.setTransform(
+      dpr * zoom,
+      0,
+      0,
+      dpr * zoom,
+      -this.camera.x * dpr * zoom,
+      -this.camera.y * dpr * zoom,
+    );
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "medium";
+    this.clipWorldViewport(ctx, view);
+    this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
+    ctx.restore();
+
     this.drawWorldLayer(this.baseCanvas, view);
     this.drawWorldLayer(this.strokeCanvas, view);
     ctx.globalCompositeOperation = "source-over";
@@ -229,7 +222,7 @@ export class DrawingSurface {
 
   private startWorldAnimation(): void {
     this.animationTimer = window.setInterval(() => {
-      if (this.destroyed || this.interactionActive) return;
+      if (this.destroyed || this.lastPoint !== null) return;
       this.requestRender();
     }, WORLD_ANIMATION_INTERVAL);
   }
@@ -240,11 +233,24 @@ export class DrawingSurface {
     const visibleHeight = this.cssHeight / zoom;
     const sourceWidth = Math.min(this.options.worldWidth, visibleWidth);
     const sourceHeight = Math.min(this.options.worldHeight, visibleHeight);
-    const sourceX = visibleWidth >= this.options.worldWidth ? 0 : Math.max(0, Math.min(this.camera.x, this.options.worldWidth - sourceWidth));
-    const sourceY = visibleHeight >= this.options.worldHeight ? 0 : Math.max(0, Math.min(this.camera.y, this.options.worldHeight - sourceHeight));
+    const sourceX = visibleWidth >= this.options.worldWidth
+      ? 0
+      : Math.max(0, Math.min(this.camera.x, this.options.worldWidth - sourceWidth));
+    const sourceY = visibleHeight >= this.options.worldHeight
+      ? 0
+      : Math.max(0, Math.min(this.camera.y, this.options.worldHeight - sourceHeight));
     const destWidth = sourceWidth * zoom;
     const destHeight = sourceHeight * zoom;
-    return { sourceX, sourceY, sourceWidth, sourceHeight, destX: (this.cssWidth - destWidth) / 2, destY: (this.cssHeight - destHeight) / 2, destWidth, destHeight };
+    return {
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      destX: (this.cssWidth - destWidth) / 2,
+      destY: (this.cssHeight - destHeight) / 2,
+      destWidth,
+      destHeight,
+    };
   }
 
   private drawWorldLayer(canvas: HTMLCanvasElement, view: ReturnType<DrawingSurface["getVisibleWorldRect"]>): void {
@@ -252,12 +258,24 @@ export class DrawingSurface {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "medium";
-    ctx.drawImage(canvas, view.sourceX, view.sourceY, view.sourceWidth, view.sourceHeight, view.destX, view.destY, view.destWidth, view.destHeight);
+    ctx.drawImage(
+      canvas,
+      view.sourceX,
+      view.sourceY,
+      view.sourceWidth,
+      view.sourceHeight,
+      view.destX,
+      view.destY,
+      view.destWidth,
+      view.destHeight,
+    );
   }
 
   private clipWorldViewport(ctx: CanvasRenderingContext2D, view: ReturnType<DrawingSurface["getVisibleWorldRect"]>): void {
+    const left = view.sourceX;
+    const top = view.sourceY;
     ctx.beginPath();
-    ctx.rect(view.sourceX, view.sourceY, view.sourceWidth, view.sourceHeight);
+    ctx.rect(left, top, view.sourceWidth, view.sourceHeight);
     ctx.clip();
   }
 
@@ -268,7 +286,9 @@ export class DrawingSurface {
     return canvas;
   }
 
-  private paintWorldBackground(): void { this.worldRenderer.paintStatic(this.worldBackgroundContext, this.options.worldWidth, this.options.worldHeight); }
+  private paintWorldBackground(): void {
+    this.worldRenderer.paintStatic(this.worldBackgroundContext, this.options.worldWidth, this.options.worldHeight);
+  }
 
   private drawStroke(stroke: Stroke): void {
     const [first, ...rest] = stroke.points;
@@ -288,17 +308,6 @@ export class DrawingSurface {
     this.strokeContext.fill();
   }
 
-  private drawDotToViewport(point: Point, brush: Brush): void {
-    const ctx = this.viewportContext;
-    ctx.setTransform(this.dpr * this.camera.zoom, 0, 0, this.dpr * this.camera.zoom, -this.camera.x * this.dpr * this.camera.zoom, -this.camera.y * this.dpr * this.camera.zoom);
-    this.configureBrush(ctx, brush);
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalCompositeOperation = "source-over";
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-  }
-
   private drawSegment(from: Point, to: Point, brush: Brush): void {
     this.configureBrush(this.strokeContext, brush);
     this.strokeContext.beginPath();
@@ -309,7 +318,15 @@ export class DrawingSurface {
 
   private drawSegmentToViewport(from: Point, to: Point, brush: Brush): void {
     const ctx = this.viewportContext;
-    ctx.setTransform(this.dpr * this.camera.zoom, 0, 0, this.dpr * this.camera.zoom, -this.camera.x * this.dpr * this.camera.zoom, -this.camera.y * this.dpr * this.camera.zoom);
+    ctx.globalCompositeOperation = "source-over";
+    ctx.setTransform(
+      this.dpr * this.camera.zoom,
+      0,
+      0,
+      this.dpr * this.camera.zoom,
+      -this.camera.x * this.dpr * this.camera.zoom,
+      -this.camera.y * this.dpr * this.camera.zoom,
+    );
     this.configureBrush(ctx, brush);
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
