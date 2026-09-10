@@ -23,7 +23,6 @@ export class DrawingSurface {
   private dpr = 1;
   private lastPoint: Point | null = null;
   private renderFrame: number | null = null;
-  private drawing = false;
 
   constructor(private readonly viewportCanvas: HTMLCanvasElement, private readonly options: SurfaceOptions) {
     const context = viewportCanvas.getContext("2d", { alpha: false });
@@ -47,21 +46,20 @@ export class DrawingSurface {
   }
 
   resize(cssWidth: number, cssHeight: number): void {
+    if (!Number.isFinite(cssWidth) || !Number.isFinite(cssHeight) || cssWidth <= 0 || cssHeight <= 0) return;
     const nextWidth = Math.max(1, Math.round(cssWidth));
     const nextHeight = Math.max(1, Math.round(cssHeight));
     const nextDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-
-    // ResizeObserver can fire repeatedly during layout. Never reset the backing
-    // store when the effective viewport has not actually changed: resetting a
-    // canvas clears it and was a direct source of visible white/black flashing.
     if (nextWidth === this.cssWidth && nextHeight === this.cssHeight && nextDpr === this.dpr) return;
 
     this.cancelRender();
     this.cssWidth = nextWidth;
     this.cssHeight = nextHeight;
     this.dpr = nextDpr;
-    this.viewportCanvas.width = Math.round(this.cssWidth * this.dpr);
-    this.viewportCanvas.height = Math.round(this.cssHeight * this.dpr);
+    const backingWidth = Math.max(1, Math.round(this.cssWidth * this.dpr));
+    const backingHeight = Math.max(1, Math.round(this.cssHeight * this.dpr));
+    if (this.viewportCanvas.width !== backingWidth) this.viewportCanvas.width = backingWidth;
+    if (this.viewportCanvas.height !== backingHeight) this.viewportCanvas.height = backingHeight;
     this.camera.setViewport(this.cssWidth, this.cssHeight);
     this.render();
   }
@@ -80,7 +78,6 @@ export class DrawingSurface {
 
   startStroke(point: Point, brush: Brush): boolean {
     if (!this.camera.isInsideWorld(point)) return false;
-    this.drawing = true;
     this.lastPoint = point;
     this.drawDot(point, brush);
     this.render();
@@ -93,14 +90,11 @@ export class DrawingSurface {
     this.drawSegment(from, point, brush);
     this.lastPoint = point;
 
-    // Normal drawing is painted directly into the already-composited viewport.
-    // This avoids redrawing three 1800x2400 world canvases for every PointerMove.
     if (!brush.eraser) this.drawSegmentToViewport(from, point, brush);
     else this.requestRender();
   }
 
   endStroke(): void {
-    this.drawing = false;
     this.lastPoint = null;
     this.cancelRender();
     this.render();
@@ -138,9 +132,6 @@ export class DrawingSurface {
     const dpr = this.dpr;
     const zoom = this.camera.zoom;
 
-    // Always restore normal compositing before rebuilding the viewport. An eraser
-    // uses destination-out; leaving that state active here would erase the newly
-    // painted background and produce the exact flashing/blanking seen on zoom.
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = this.options.map === "space" ? "#030711" : "#cbd8d2";
@@ -163,7 +154,7 @@ export class DrawingSurface {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
-  private requestRender(): void {
+  requestRender(): void {
     if (this.renderFrame !== null) return;
     this.renderFrame = window.requestAnimationFrame(() => {
       this.renderFrame = null;
@@ -178,7 +169,6 @@ export class DrawingSurface {
   }
 
   destroy(): void {
-    this.drawing = false;
     this.lastPoint = null;
     this.cancelRender();
   }
