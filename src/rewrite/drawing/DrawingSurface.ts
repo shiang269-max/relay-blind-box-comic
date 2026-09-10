@@ -140,9 +140,6 @@ export class DrawingSurface {
     const worldWidth = this.options.worldWidth;
     const worldHeight = this.options.worldHeight;
 
-    // One rendering coordinate system: CSS viewport -> DPR -> camera world.
-    // All world layers use the same transform; this avoids mixing crop coordinates
-    // with camera coordinates during the same composite pass.
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = this.options.map === "space" ? "#030711" : "#cbd8d2";
@@ -159,13 +156,9 @@ export class DrawingSurface {
     );
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "medium";
-
-    // Only the actual world may receive world layers. The camera may expose
-    // negative world coordinates at fit zoom; those areas remain the viewport fill.
     ctx.beginPath();
     ctx.rect(0, 0, worldWidth, worldHeight);
     ctx.clip();
-
     ctx.drawImage(this.worldBackgroundCanvas, 0, 0, worldWidth, worldHeight);
     this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
     ctx.drawImage(this.baseCanvas, 0, 0, worldWidth, worldHeight);
@@ -275,6 +268,7 @@ export class DrawingSurface {
 
   private drawSegmentToViewport(from: Point, to: Point, brush: Brush): void {
     const ctx = this.viewportContext;
+    ctx.save();
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(
       this.dpr * this.camera.zoom,
@@ -284,11 +278,15 @@ export class DrawingSurface {
       -this.camera.x * this.dpr * this.camera.zoom,
       -this.camera.y * this.dpr * this.camera.zoom,
     );
+    ctx.beginPath();
+    ctx.rect(0, 0, this.options.worldWidth, this.options.worldHeight);
+    ctx.clip();
     this.configureBrush(ctx, brush);
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
     ctx.lineTo(to.x, to.y);
     ctx.stroke();
+    ctx.restore();
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
