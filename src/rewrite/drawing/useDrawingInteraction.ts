@@ -6,6 +6,11 @@ type ScreenPoint = { x: number; y: number };
 type InteractionState = "idle" | "drawing" | "moving" | "pinching" | "eraser";
 interface Options { surfaceRef: React.RefObject<DrawingSurface | null>; sessionRef: React.RefObject<DrawingSession | null>; brush: () => Brush; moveMode: boolean; onStrokeEnd?: () => void; onInteractionChange?: (state: InteractionState) => void; }
 
+function latestPointerEvent(event: PointerEvent): PointerEvent {
+  const coalesced = event.getCoalescedEvents?.();
+  return coalesced && coalesced.length > 0 ? coalesced[coalesced.length - 1] : event;
+}
+
 export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode, onStrokeEnd, onInteractionChange }: Options) {
   const pointers = useRef(new Map<number, ScreenPoint>());
   const pending = useRef<{ id: number; start: ScreenPoint } | null>(null);
@@ -53,14 +58,17 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
 
   const drawMove = useCallback((event: PointerEvent, surface: DrawingSurface, session: DrawingSession) => {
     if (drawingId.current !== event.pointerId) return;
-    session.move(surface.eventToWorld(event), brush());
+    const pointEvent = latestPointerEvent(event);
+    session.move(surface.eventToWorld(pointEvent), brush());
     state(brush().eraser ? "eraser" : "drawing");
   }, [brush, state]);
 
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault(); const surface = surfaceRef.current, session = sessionRef.current; if (!surface || !session) return;
     const native = event.nativeEvent;
-    const screen = surface.eventToScreen(native); if (pointers.current.has(native.pointerId)) pointers.current.set(native.pointerId, screen);
+    const pointEvent = latestPointerEvent(native);
+    const screen = surface.eventToScreen(pointEvent);
+    if (pointers.current.has(native.pointerId)) pointers.current.set(native.pointerId, screen);
     if (moveMode && pointers.current.size >= 2) {
       const value = pinch();
       if (value && pinchDistance.current && pinchCenter.current) {
