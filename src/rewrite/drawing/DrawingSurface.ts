@@ -47,14 +47,21 @@ export class DrawingSurface {
   }
 
   resize(cssWidth: number, cssHeight: number): void {
+    const nextWidth = Math.max(1, Math.round(cssWidth));
+    const nextHeight = Math.max(1, Math.round(cssHeight));
+    const nextDpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+
+    // ResizeObserver can fire repeatedly during layout. Never reset the backing
+    // store when the effective viewport has not actually changed: resetting a
+    // canvas clears it and was a direct source of visible white/black flashing.
+    if (nextWidth === this.cssWidth && nextHeight === this.cssHeight && nextDpr === this.dpr) return;
+
     this.cancelRender();
-    this.cssWidth = Math.max(1, Math.round(cssWidth));
-    this.cssHeight = Math.max(1, Math.round(cssHeight));
-    this.dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    this.cssWidth = nextWidth;
+    this.cssHeight = nextHeight;
+    this.dpr = nextDpr;
     this.viewportCanvas.width = Math.round(this.cssWidth * this.dpr);
     this.viewportCanvas.height = Math.round(this.cssHeight * this.dpr);
-    this.viewportCanvas.style.width = `${this.cssWidth}px`;
-    this.viewportCanvas.style.height = `${this.cssHeight}px`;
     this.camera.setViewport(this.cssWidth, this.cssHeight);
     this.render();
   }
@@ -131,8 +138,10 @@ export class DrawingSurface {
     const dpr = this.dpr;
     const zoom = this.camera.zoom;
 
-    // The viewport itself always has a world-toned fill, so minimum zoom never
-    // exposes the page's white background through aspect-ratio letterboxing.
+    // Always restore normal compositing before rebuilding the viewport. An eraser
+    // uses destination-out; leaving that state active here would erase the newly
+    // painted background and produce the exact flashing/blanking seen on zoom.
+    ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = this.options.map === "space" ? "#030711" : "#cbd8d2";
     ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
@@ -150,6 +159,7 @@ export class DrawingSurface {
     ctx.drawImage(this.worldBackgroundCanvas, 0, 0);
     ctx.drawImage(this.baseCanvas, 0, 0);
     ctx.drawImage(this.strokeCanvas, 0, 0);
+    ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -247,6 +257,7 @@ export class DrawingSurface {
 
   private drawSegmentToViewport(from: Point, to: Point, brush: Brush): void {
     const ctx = this.viewportContext;
+    ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(
       this.dpr * this.camera.zoom,
       0,
@@ -260,6 +271,7 @@ export class DrawingSurface {
     ctx.moveTo(from.x, from.y);
     ctx.lineTo(to.x, to.y);
     ctx.stroke();
+    ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
