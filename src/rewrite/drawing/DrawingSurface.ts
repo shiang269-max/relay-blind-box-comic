@@ -1,11 +1,13 @@
 import { Camera, type Point } from "./Camera";
 import type { Stroke } from "./Stroke";
-import type { MapType, TimeOfDay } from "../domain";
+import { getWorldTimeProgress, type MapType, type TimeOfDay } from "../domain";
+import { WorldRenderer } from "../visuals/WorldRenderer";
 
 export interface Brush { color: string; size: number; eraser: boolean; }
-export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; }
+export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; round?: number; }
 const EXPORT_MAX_WIDTH = 1800;
 const EXPORT_MAX_HEIGHT = 2400;
+const WORLD_ANIMATION_INTERVAL = 150;
 
 export class DrawingSurface {
   readonly camera: Camera;
@@ -16,11 +18,13 @@ export class DrawingSurface {
   private readonly strokeCanvas: HTMLCanvasElement;
   private readonly strokeContext: CanvasRenderingContext2D;
   private readonly viewportContext: CanvasRenderingContext2D;
+  private readonly worldRenderer: WorldRenderer;
   private cssWidth = 1;
   private cssHeight = 1;
   private dpr = 1;
   private lastPoint: Point | null = null;
   private renderFrame: number | null = null;
+  private animationTimer: number | null = null;
 
   constructor(private readonly viewportCanvas: HTMLCanvasElement, private readonly options: SurfaceOptions) {
     const context = viewportCanvas.getContext("2d");
@@ -38,8 +42,10 @@ export class DrawingSurface {
     const stroke = this.strokeCanvas.getContext("2d");
     if (!stroke) throw new Error("無法建立 stroke context");
     this.strokeContext = stroke;
+    this.worldRenderer = new WorldRenderer({ map: options.map, progress: getWorldTimeProgress(options.round ?? 1) });
     this.paintWorldBackground();
     this.camera = new Camera({ width: options.worldWidth, height: options.worldHeight });
+    this.startWorldAnimation();
   }
 
   resize(cssWidth: number, cssHeight: number): void {
@@ -133,6 +139,7 @@ export class DrawingSurface {
     ctx.drawImage(this.worldBackgroundCanvas, 0, 0);
     ctx.drawImage(this.baseCanvas, 0, 0);
     ctx.drawImage(this.strokeCanvas, 0, 0);
+    this.worldRenderer.paintDynamic(ctx, performance.now());
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -148,6 +155,16 @@ export class DrawingSurface {
     if (this.renderFrame === null) return;
     window.cancelAnimationFrame(this.renderFrame);
     this.renderFrame = null;
+  }
+
+  private startWorldAnimation(): void {
+    const tick = () => {
+      this.animationTimer = null;
+      if (!this.viewportCanvas.isConnected) return;
+      if (document.visibilityState !== "hidden") this.render();
+      this.animationTimer = window.setTimeout(tick, WORLD_ANIMATION_INTERVAL);
+    };
+    this.animationTimer = window.setTimeout(tick, WORLD_ANIMATION_INTERVAL);
   }
 
   getStrokeCoverageScore(): number {
@@ -193,7 +210,7 @@ export class DrawingSurface {
   }
 
   private paintWorldBackground(): void {
-    this.worldBackgroundContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
+    this.worldRenderer.paintStatic(this.worldBackgroundContext, this.options.worldWidth, this.options.worldHeight);
   }
 
   private drawStroke(stroke: Stroke): void {
