@@ -123,9 +123,10 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     const surface = surfaceRef.current;
     if (!surface) return;
     stopInertia();
+    setInteraction(true);
     surface.camera.zoomAt(surface.eventToScreen(event), Math.exp(-event.deltaY * 0.0015));
     surface.requestRender();
-  }, [moveMode, stopInertia, surfaceRef]);
+  }, [moveMode, setInteraction, stopInertia, surfaceRef]);
 
   return { handlePointerDown, handlePointerMove, finishPointer, handleWheel };
 }
