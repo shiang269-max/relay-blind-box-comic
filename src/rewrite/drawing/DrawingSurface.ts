@@ -66,7 +66,6 @@ export class DrawingSurface {
     this.viewportCssWidth = Math.max(1, rect.width);
     this.viewportCssHeight = Math.max(1, rect.height);
     if (nextWidth === this.cssWidth && nextHeight === this.cssHeight && nextDpr === this.dpr) return;
-
     this.cancelRender();
     this.cssWidth = nextWidth;
     this.cssHeight = nextHeight;
@@ -86,9 +85,7 @@ export class DrawingSurface {
     };
   }
 
-  eventToWorld(event: PointerEvent): Point {
-    return this.camera.screenToWorld(this.eventToScreen(event));
-  }
+  eventToWorld(event: PointerEvent): Point { return this.camera.screenToWorld(this.eventToScreen(event)); }
 
   setInteractionActive(active: boolean): void {
     if (this.destroyed) return;
@@ -101,8 +98,8 @@ export class DrawingSurface {
     this.interactionActive = true;
     this.lastPoint = point;
     this.drawDot(point, brush);
-    if (brush.eraser) this.requestRender();
-    else this.drawDotToViewport(point, brush);
+    if (!brush.eraser) this.drawDotToViewport(point, brush);
+    else this.requestRender();
     return true;
   }
 
@@ -113,11 +110,8 @@ export class DrawingSurface {
     if (distance < MIN_PREVIEW_DISTANCE) return;
     this.drawSegment(from, point, brush);
     this.lastPoint = point;
-    if (!brush.eraser) {
-      this.drawSegmentToViewport(from, point, brush);
-      return;
-    }
-    this.requestRender();
+    if (!brush.eraser) this.drawSegmentToViewport(from, point, brush);
+    else this.requestRender();
   }
 
   endStroke(): void {
@@ -159,15 +153,12 @@ export class DrawingSurface {
     const ctx = this.viewportContext;
     const dpr = this.dpr;
     const zoom = this.camera.zoom;
-
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = this.options.map === "space" ? "#030711" : "#cbd8d2";
     ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
-
     const view = this.getVisibleWorldRect();
     this.drawWorldLayer(this.worldBackgroundCanvas, view);
-
     if (!this.interactionActive) {
       ctx.save();
       ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, -this.camera.x * dpr * zoom, -this.camera.y * dpr * zoom);
@@ -177,7 +168,6 @@ export class DrawingSurface {
       this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
       ctx.restore();
     }
-
     this.drawWorldLayer(this.baseCanvas, view);
     this.drawWorldLayer(this.strokeCanvas, view);
     ctx.globalCompositeOperation = "source-over";
@@ -278,9 +268,7 @@ export class DrawingSurface {
     return canvas;
   }
 
-  private paintWorldBackground(): void {
-    this.worldRenderer.paintStatic(this.worldBackgroundContext, this.options.worldWidth, this.options.worldHeight);
-  }
+  private paintWorldBackground(): void { this.worldRenderer.paintStatic(this.worldBackgroundContext, this.options.worldWidth, this.options.worldHeight); }
 
   private drawStroke(stroke: Stroke): void {
     const [first, ...rest] = stroke.points;
