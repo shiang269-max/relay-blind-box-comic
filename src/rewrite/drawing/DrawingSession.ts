@@ -42,10 +42,7 @@ export class DrawingSession {
   }
 
   undo(): boolean {
-    if (this.activeStroke) {
-      this.activeStroke = null;
-      this.surface.redraw(this.strokes);
-    }
+    this.activeStroke = null;
     if (this.strokes.length === 0) return false;
     this.strokes.pop();
     this.surface.redraw(this.strokes);
