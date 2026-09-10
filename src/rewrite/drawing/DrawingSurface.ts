@@ -7,6 +7,7 @@ export interface Brush { color: string; size: number; eraser: boolean; }
 export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; round?: number; }
 const EXPORT_MAX_WIDTH = 1800;
 const EXPORT_MAX_HEIGHT = 2400;
+const WORLD_ANIMATION_INTERVAL = 120;
 
 export class DrawingSurface {
   readonly camera: Camera;
@@ -23,6 +24,8 @@ export class DrawingSurface {
   private dpr = 1;
   private lastPoint: Point | null = null;
   private renderFrame: number | null = null;
+  private animationTimer: number | null = null;
+  private destroyed = false;
 
   constructor(private readonly viewportCanvas: HTMLCanvasElement, private readonly options: SurfaceOptions) {
     const context = viewportCanvas.getContext("2d", { alpha: false });
@@ -43,6 +46,7 @@ export class DrawingSurface {
     this.worldRenderer = new WorldRenderer({ map: options.map, progress: getWorldTimeProgress(options.round ?? 1) });
     this.paintWorldBackground();
     this.camera = new Camera({ width: options.worldWidth, height: options.worldHeight });
+    this.startWorldAnimation();
   }
 
   resize(cssWidth: number, cssHeight: number): void {
@@ -80,6 +84,7 @@ export class DrawingSurface {
     if (!this.camera.isInsideWorld(point)) return false;
     this.lastPoint = point;
     this.drawDot(point, brush);
+    this.cancelRender();
     this.render();
     return true;
   }
@@ -128,6 +133,7 @@ export class DrawingSurface {
   }
 
   render(): void {
+    if (this.destroyed) return;
     const ctx = this.viewportContext;
     const dpr = this.dpr;
     const zoom = this.camera.zoom;
@@ -137,6 +143,10 @@ export class DrawingSurface {
     ctx.fillStyle = this.options.map === "space" ? "#030711" : "#cbd8d2";
     ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
 
+    const view = this.getVisibleWorldRect();
+    this.drawWorldLayer(this.worldBackgroundCanvas, view);
+
+    ctx.save();
     ctx.setTransform(
       dpr * zoom,
       0,
@@ -147,30 +157,32 @@ export class DrawingSurface {
     );
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "medium";
-    ctx.drawImage(this.worldBackgroundCanvas, 0, 0);
-    ctx.drawImage(this.baseCanvas, 0, 0);
-    ctx.drawImage(this.strokeCanvas, 0, 0);
+    this.clipWorldViewport(ctx, view);
+    this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
+    ctx.restore();
+
+    this.drawWorldLayer(this.baseCanvas, view);
+    this.drawWorldLayer(this.strokeCanvas, view);
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   requestRender(): void {
-    if (this.renderFrame !== null) return;
+    if (this.destroyed || this.renderFrame !== null) return;
     this.renderFrame = window.requestAnimationFrame(() => {
       this.renderFrame = null;
       this.render();
     });
   }
 
-  private cancelRender(): void {
-    if (this.renderFrame === null) return;
-    window.cancelAnimationFrame(this.renderFrame);
-    this.renderFrame = null;
-  }
-
   destroy(): void {
+    this.destroyed = true;
     this.lastPoint = null;
     this.cancelRender();
+    if (this.animationTimer !== null) {
+      window.clearInterval(this.animationTimer);
+      this.animationTimer = null;
+    }
   }
 
   getStrokeCoverageScore(): number {
@@ -206,6 +218,65 @@ export class DrawingSurface {
     ctx.drawImage(this.baseCanvas, 0, 0, width, height);
     ctx.drawImage(this.strokeCanvas, 0, 0, width, height);
     return output.toDataURL("image/png");
+  }
+
+  private startWorldAnimation(): void {
+    this.animationTimer = window.setInterval(() => {
+      if (this.destroyed || this.lastPoint !== null) return;
+      this.requestRender();
+    }, WORLD_ANIMATION_INTERVAL);
+  }
+
+  private getVisibleWorldRect(): { sourceX: number; sourceY: number; sourceWidth: number; sourceHeight: number; destX: number; destY: number; destWidth: number; destHeight: number } {
+    const zoom = this.camera.zoom;
+    const visibleWidth = this.cssWidth / zoom;
+    const visibleHeight = this.cssHeight / zoom;
+    const sourceWidth = Math.min(this.options.worldWidth, visibleWidth);
+    const sourceHeight = Math.min(this.options.worldHeight, visibleHeight);
+    const sourceX = visibleWidth >= this.options.worldWidth
+      ? 0
+      : Math.max(0, Math.min(this.camera.x, this.options.worldWidth - sourceWidth));
+    const sourceY = visibleHeight >= this.options.worldHeight
+      ? 0
+      : Math.max(0, Math.min(this.camera.y, this.options.worldHeight - sourceHeight));
+    const destWidth = sourceWidth * zoom;
+    const destHeight = sourceHeight * zoom;
+    return {
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      destX: (this.cssWidth - destWidth) / 2,
+      destY: (this.cssHeight - destHeight) / 2,
+      destWidth,
+      destHeight,
+    };
+  }
+
+  private drawWorldLayer(canvas: HTMLCanvasElement, view: ReturnType<DrawingSurface["getVisibleWorldRect"]>): void {
+    const ctx = this.viewportContext;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "medium";
+    ctx.drawImage(
+      canvas,
+      view.sourceX,
+      view.sourceY,
+      view.sourceWidth,
+      view.sourceHeight,
+      view.destX,
+      view.destY,
+      view.destWidth,
+      view.destHeight,
+    );
+  }
+
+  private clipWorldViewport(ctx: CanvasRenderingContext2D, view: ReturnType<DrawingSurface["getVisibleWorldRect"]>): void {
+    const left = view.sourceX;
+    const top = view.sourceY;
+    ctx.beginPath();
+    ctx.rect(left, top, view.sourceWidth, view.sourceHeight);
+    ctx.clip();
   }
 
   private createWorldCanvas(): HTMLCanvasElement {
@@ -272,5 +343,11 @@ export class DrawingSurface {
     ctx.lineWidth = brush.size;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+  }
+
+  private cancelRender(): void {
+    if (this.renderFrame === null) return;
+    window.cancelAnimationFrame(this.renderFrame);
+    this.renderFrame = null;
   }
 }
