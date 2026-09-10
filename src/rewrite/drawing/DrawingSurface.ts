@@ -7,7 +7,8 @@ export interface Brush { color: string; size: number; eraser: boolean; }
 export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; round?: number; }
 const EXPORT_MAX_WIDTH = 1800;
 const EXPORT_MAX_HEIGHT = 2400;
-const WORLD_ANIMATION_INTERVAL = 120;
+const WORLD_ANIMATION_INTERVAL = 180;
+const MIN_PREVIEW_DISTANCE = 0.35;
 
 export class DrawingSurface {
   readonly camera: Camera;
@@ -26,6 +27,8 @@ export class DrawingSurface {
   private renderFrame: number | null = null;
   private animationTimer: number | null = null;
   private destroyed = false;
+  private interactionActive = false;
+  private lastRenderedCamera = { x: 0, y: 0, zoom: 1 };
 
   constructor(private readonly viewportCanvas: HTMLCanvasElement, private readonly options: SurfaceOptions) {
     const context = viewportCanvas.getContext("2d", { alpha: false });
@@ -70,9 +73,11 @@ export class DrawingSurface {
 
   eventToScreen(event: PointerEvent | WheelEvent): Point {
     const rect = this.viewportCanvas.getBoundingClientRect();
+    const scaleX = this.cssWidth / Math.max(1, rect.width);
+    const scaleY = this.cssHeight / Math.max(1, rect.height);
     return {
-      x: (event.clientX - rect.left) * this.cssWidth / Math.max(1, rect.width),
-      y: (event.clientY - rect.top) * this.cssHeight / Math.max(1, rect.height),
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
     };
   }
 
@@ -80,27 +85,38 @@ export class DrawingSurface {
     return this.camera.screenToWorld(this.eventToScreen(event));
   }
 
+  setInteractionActive(active: boolean): void {
+    if (this.destroyed) return;
+    this.interactionActive = active;
+    if (active) this.cancelRender();
+  }
+
   startStroke(point: Point, brush: Brush): boolean {
     if (!this.camera.isInsideWorld(point)) return false;
+    this.interactionActive = true;
     this.lastPoint = point;
     this.drawDot(point, brush);
-    this.cancelRender();
-    this.render();
+    this.drawDotToViewport(point, brush);
     return true;
   }
 
   continueStroke(point: Point, brush: Brush): void {
     if (!this.lastPoint) return;
     const from = this.lastPoint;
+    const distance = Math.hypot(point.x - from.x, point.y - from.y);
+    if (distance < MIN_PREVIEW_DISTANCE) return;
     this.drawSegment(from, point, brush);
     this.lastPoint = point;
-
-    if (!brush.eraser) this.drawSegmentToViewport(from, point, brush);
-    else this.requestRender();
+    if (!brush.eraser) {
+      this.drawSegmentToViewport(from, point, brush);
+      return;
+    }
+    this.requestRender();
   }
 
   endStroke(): void {
     this.lastPoint = null;
+    this.interactionActive = false;
     this.cancelRender();
     this.render();
   }
@@ -146,25 +162,28 @@ export class DrawingSurface {
     const view = this.getVisibleWorldRect();
     this.drawWorldLayer(this.worldBackgroundCanvas, view);
 
-    ctx.save();
-    ctx.setTransform(
-      dpr * zoom,
-      0,
-      0,
-      dpr * zoom,
-      -this.camera.x * dpr * zoom,
-      -this.camera.y * dpr * zoom,
-    );
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "medium";
-    this.clipWorldViewport(ctx, view);
-    this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
-    ctx.restore();
+    if (!this.interactionActive) {
+      ctx.save();
+      ctx.setTransform(
+        dpr * zoom,
+        0,
+        0,
+        dpr * zoom,
+        -this.camera.x * dpr * zoom,
+        -this.camera.y * dpr * zoom,
+      );
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "medium";
+      this.clipWorldViewport(ctx, view);
+      this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
+      ctx.restore();
+    }
 
     this.drawWorldLayer(this.baseCanvas, view);
     this.drawWorldLayer(this.strokeCanvas, view);
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.lastRenderedCamera = { x: this.camera.x, y: this.camera.y, zoom: this.camera.zoom };
   }
 
   requestRender(): void {
@@ -222,7 +241,7 @@ export class DrawingSurface {
 
   private startWorldAnimation(): void {
     this.animationTimer = window.setInterval(() => {
-      if (this.destroyed || this.lastPoint !== null) return;
+      if (this.destroyed || this.interactionActive) return;
       this.requestRender();
     }, WORLD_ANIMATION_INTERVAL);
   }
@@ -272,10 +291,8 @@ export class DrawingSurface {
   }
 
   private clipWorldViewport(ctx: CanvasRenderingContext2D, view: ReturnType<DrawingSurface["getVisibleWorldRect"]>): void {
-    const left = view.sourceX;
-    const top = view.sourceY;
     ctx.beginPath();
-    ctx.rect(left, top, view.sourceWidth, view.sourceHeight);
+    ctx.rect(view.sourceX, view.sourceY, view.sourceWidth, view.sourceHeight);
     ctx.clip();
   }
 
@@ -306,6 +323,25 @@ export class DrawingSurface {
     this.strokeContext.beginPath();
     this.strokeContext.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
     this.strokeContext.fill();
+  }
+
+  private drawDotToViewport(point: Point, brush: Brush): void {
+    const ctx = this.viewportContext;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.setTransform(
+      this.dpr * this.camera.zoom,
+      0,
+      0,
+      this.dpr * this.camera.zoom,
+      -this.camera.x * this.dpr * this.camera.zoom,
+      -this.camera.y * this.dpr * this.camera.zoom,
+    );
+    this.configureBrush(ctx, brush);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   private drawSegment(from: Point, to: Point, brush: Brush): void {
