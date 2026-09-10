@@ -137,9 +137,9 @@ export class DrawingSurface {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "medium";
     ctx.drawImage(this.worldBackgroundCanvas, 0, 0);
+    this.worldRenderer.paintDynamic(ctx, performance.now());
     ctx.drawImage(this.baseCanvas, 0, 0);
     ctx.drawImage(this.strokeCanvas, 0, 0);
-    this.worldRenderer.paintDynamic(ctx, performance.now());
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
