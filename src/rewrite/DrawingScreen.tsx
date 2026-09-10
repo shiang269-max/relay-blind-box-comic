@@ -10,7 +10,6 @@ import { useDrawingInteraction } from "./drawing/useDrawingInteraction";
 import { RelayPageDrawingAdapter } from "./modes/RelayPageDrawingAdapter";
 import { RelayPageDrawingLifecycle } from "./modes/RelayPageDrawingLifecycle";
 import { FirebaseDrawingPersistence } from "./persistence/FirebaseDrawingPersistence";
-import GameAtmosphere from "./visuals/GameAtmosphere";
 
 const COLORS = ["#000000", "#ffffff", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6"];
 type InteractionState = "idle" | "drawing" | "moving" | "pinching" | "eraser";
@@ -91,13 +90,13 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
   useEffect(() => {
     const canvas = canvasRef.current; if (!canvas) return;
     let cancelled = false; setLoadingDrawing(true); setAutosaveState("idle"); setSubmitError(null);
-    const surface = new DrawingSurface(canvas, { worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT, map, time });
+    const surface = new DrawingSurface(canvas, { worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT, map, time, round });
     const session = new DrawingSession(surface); const adapter = new RelayPageDrawingAdapter({ roomId, gameId, pageIndex, persistence: new FirebaseDrawingPersistence() }); const lifecycle = new RelayPageDrawingLifecycle(session, adapter);
     surfaceRef.current = surface; sessionRef.current = session; lifecycleRef.current = lifecycle; resize();
     const initialize = async () => { try { await lifecycle.initialize(); if (previousPage) await surface.loadImage(previousPage); } finally { if (!cancelled) setLoadingDrawing(false); } };
     void initialize(); const observer = new ResizeObserver(resize); const container = containerRef.current; if (container) observer.observe(container);
     return () => { cancelled = true; if (autosaveTimerRef.current !== null) window.clearTimeout(autosaveTimerRef.current); observer.disconnect(); session.end(); if (surfaceRef.current === surface) surfaceRef.current = null; if (sessionRef.current === session) sessionRef.current = null; if (lifecycleRef.current === lifecycle) lifecycleRef.current = null; };
-  }, [gameId, map, pageIndex, previousPage, resize, roomId, time]);
+  }, [gameId, map, pageIndex, previousPage, resize, roomId, round, time]);
 
   useEffect(() => { const handleVisibilityChange = () => { if (document.visibilityState !== "hidden") return; if (autosaveTimerRef.current !== null) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; } void saveSnapshotNow(); }; document.addEventListener("visibilitychange", handleVisibilityChange); return () => document.removeEventListener("visibilitychange", handleVisibilityChange); }, [saveSnapshotNow]);
 
@@ -133,7 +132,6 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
   const ModeIcon = moveMode ? Hand : interaction === "eraser" || eraser ? Eraser : PenLine;
 
   return <div className="relative flex w-screen flex-col overflow-hidden text-white" style={{ height: "var(--app-height, 100svh)", paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
-    <GameAtmosphere map={map} round={round} overlay />
     <header className="relative z-20 shrink-0 border-b border-white/10 bg-slate-950/35 px-3 py-2 backdrop-blur-xl">
       <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{playerName} 的回合</div><div className="truncate text-xs text-white/70">{mode.label} · {roundLabel} · {timeLabel}{autosaveLabel ? ` · ${autosaveLabel}` : ""}</div></div><button onClick={handleLeave} disabled={submitting || leaving} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-white/10 px-3 text-sm font-bold disabled:opacity-50" title="離開遊戲"><LogOut size={18} />{leaving ? "離開中" : "離開"}</button><button onClick={handleSubmit} disabled={submitting || loadingDrawing || leaving} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-green-500/90 px-4 text-sm font-bold shadow-lg shadow-green-950/30 disabled:opacity-50"><Check size={18} />{loadingDrawing ? "載入中" : submitting ? "送出中" : "送出"}</button></div>
       {progress !== null && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-amber-200 to-indigo-300 transition-[width] duration-700" style={{ width: `${progress}%` }} /></div>}
