@@ -137,14 +137,16 @@ export class DrawingSurface {
     const ctx = this.viewportContext;
     const dpr = this.dpr;
     const zoom = this.camera.zoom;
+    const worldWidth = this.options.worldWidth;
+    const worldHeight = this.options.worldHeight;
 
+    // One rendering coordinate system: CSS viewport -> DPR -> camera world.
+    // All world layers use the same transform; this avoids mixing crop coordinates
+    // with camera coordinates during the same composite pass.
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = this.options.map === "space" ? "#030711" : "#cbd8d2";
     ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
-
-    const view = this.getVisibleWorldRect();
-    this.drawWorldLayer(this.worldBackgroundCanvas, view);
 
     ctx.save();
     ctx.setTransform(
@@ -157,12 +159,19 @@ export class DrawingSurface {
     );
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "medium";
-    this.clipWorldViewport(ctx, view);
+
+    // Only the actual world may receive world layers. The camera may expose
+    // negative world coordinates at fit zoom; those areas remain the viewport fill.
+    ctx.beginPath();
+    ctx.rect(0, 0, worldWidth, worldHeight);
+    ctx.clip();
+
+    ctx.drawImage(this.worldBackgroundCanvas, 0, 0, worldWidth, worldHeight);
     this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
+    ctx.drawImage(this.baseCanvas, 0, 0, worldWidth, worldHeight);
+    ctx.drawImage(this.strokeCanvas, 0, 0, worldWidth, worldHeight);
     ctx.restore();
 
-    this.drawWorldLayer(this.baseCanvas, view);
-    this.drawWorldLayer(this.strokeCanvas, view);
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
@@ -225,58 +234,6 @@ export class DrawingSurface {
       if (this.destroyed || this.lastPoint !== null) return;
       this.requestRender();
     }, WORLD_ANIMATION_INTERVAL);
-  }
-
-  private getVisibleWorldRect(): { sourceX: number; sourceY: number; sourceWidth: number; sourceHeight: number; destX: number; destY: number; destWidth: number; destHeight: number } {
-    const zoom = this.camera.zoom;
-    const visibleWidth = this.cssWidth / zoom;
-    const visibleHeight = this.cssHeight / zoom;
-    const sourceWidth = Math.min(this.options.worldWidth, visibleWidth);
-    const sourceHeight = Math.min(this.options.worldHeight, visibleHeight);
-    const sourceX = visibleWidth >= this.options.worldWidth
-      ? 0
-      : Math.max(0, Math.min(this.camera.x, this.options.worldWidth - sourceWidth));
-    const sourceY = visibleHeight >= this.options.worldHeight
-      ? 0
-      : Math.max(0, Math.min(this.camera.y, this.options.worldHeight - sourceHeight));
-    const destWidth = sourceWidth * zoom;
-    const destHeight = sourceHeight * zoom;
-    return {
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sourceHeight,
-      destX: (this.cssWidth - destWidth) / 2,
-      destY: (this.cssHeight - destHeight) / 2,
-      destWidth,
-      destHeight,
-    };
-  }
-
-  private drawWorldLayer(canvas: HTMLCanvasElement, view: ReturnType<DrawingSurface["getVisibleWorldRect"]>): void {
-    const ctx = this.viewportContext;
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "medium";
-    ctx.drawImage(
-      canvas,
-      view.sourceX,
-      view.sourceY,
-      view.sourceWidth,
-      view.sourceHeight,
-      view.destX,
-      view.destY,
-      view.destWidth,
-      view.destHeight,
-    );
-  }
-
-  private clipWorldViewport(ctx: CanvasRenderingContext2D, view: ReturnType<DrawingSurface["getVisibleWorldRect"]>): void {
-    const left = view.sourceX;
-    const top = view.sourceY;
-    ctx.beginPath();
-    ctx.rect(left, top, view.sourceWidth, view.sourceHeight);
-    ctx.clip();
   }
 
   private createWorldCanvas(): HTMLCanvasElement {
