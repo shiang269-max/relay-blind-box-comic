@@ -137,7 +137,7 @@ export class DrawingSurface {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "medium";
     ctx.drawImage(this.worldBackgroundCanvas, 0, 0);
-    this.worldRenderer.paintDynamic(ctx, performance.now());
+    this.worldRenderer.paintDynamic(ctx, this.camera, performance.now());
     ctx.drawImage(this.baseCanvas, 0, 0);
     ctx.drawImage(this.strokeCanvas, 0, 0);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -218,33 +218,3 @@ export class DrawingSurface {
     if (!first) return;
     this.drawDot(first, stroke.brush);
     let previous = first;
-    for (const point of rest) {
-      this.drawSegment(previous, point, stroke.brush);
-      previous = point;
-    }
-  }
-
-  private drawSegment(from: Point, to: Point, brush: Brush): void {
-    this.strokeContext.save();
-    this.strokeContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
-    this.strokeContext.strokeStyle = brush.color;
-    this.strokeContext.lineWidth = brush.size;
-    this.strokeContext.lineCap = "round";
-    this.strokeContext.lineJoin = "round";
-    this.strokeContext.beginPath();
-    this.strokeContext.moveTo(from.x, from.y);
-    this.strokeContext.lineTo(to.x, to.y);
-    this.strokeContext.stroke();
-    this.strokeContext.restore();
-  }
-
-  private drawDot(point: Point, brush: Brush): void {
-    this.strokeContext.save();
-    this.strokeContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
-    this.strokeContext.fillStyle = brush.color;
-    this.strokeContext.beginPath();
-    this.strokeContext.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
-    this.strokeContext.fill();
-    this.strokeContext.restore();
-  }
-}
