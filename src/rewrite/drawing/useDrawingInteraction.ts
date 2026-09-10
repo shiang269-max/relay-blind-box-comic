@@ -117,6 +117,15 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     if (wasMoving) startInertia(); else { setInteraction(false); state("idle"); }
   }, [moveMode, onStrokeEnd, resetPinch, sessionRef, setInteraction, startInertia, state]);
 
-  const handleWheel = useCallback((event: WheelEvent) => { if (!moveMode) return; event.preventDefault(); const surface = surfaceRef.current; if (!surface) return; stopInertia(); setInteraction(true); surface.camera.zoomAt(surface.eventToScreen(event), Math.exp(-event.deltaY * 0.0015)); surface.requestRender(); window.clearTimeout((handleWheel as typeof handleWheel & { finishTimer?: number }).finishTimer); (handleWheel as typeof handleWheel & { finishTimer?: number }).finishTimer = window.setTimeout(() => setInteraction(false), 120); }, [moveMode, setInteraction, stopInertia, surfaceRef]);
+  const handleWheel = useCallback((event: WheelEvent) => {
+    if (!moveMode) return;
+    event.preventDefault();
+    const surface = surfaceRef.current;
+    if (!surface) return;
+    stopInertia();
+    surface.camera.zoomAt(surface.eventToScreen(event), Math.exp(-event.deltaY * 0.0015));
+    surface.requestRender();
+  }, [moveMode, stopInertia, surfaceRef]);
+
   return { handlePointerDown, handlePointerMove, finishPointer, handleWheel };
 }
