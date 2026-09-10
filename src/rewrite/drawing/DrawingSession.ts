@@ -13,7 +13,7 @@ export class DrawingSession {
   constructor(private readonly surface: DrawingSurface) {}
 
   begin(point: Point, brush: Brush): boolean {
-    this.end();
+    if (this.activeStroke) this.end();
     if (!this.surface.startStroke(point, brush)) return false;
     this.activeStroke = createStroke(this.createStrokeId(), brush, point);
     return true;
@@ -26,7 +26,7 @@ export class DrawingSession {
   }
 
   end(): void {
-    if (!this.activeStroke) { this.surface.endStroke(); return; }
+    if (!this.activeStroke) return;
     const completed = this.activeStroke;
     this.activeStroke = null;
     this.surface.endStroke();
@@ -36,15 +36,16 @@ export class DrawingSession {
 
   /** 取消未完成筆劃，並重建已提交內容，避免 Pinch 切換留下殘留筆跡。 */
   cancel(): void {
-    if (!this.activeStroke) { this.surface.endStroke(); return; }
+    if (!this.activeStroke) return;
     this.activeStroke = null;
-    this.surface.endStroke();
     this.surface.redraw(this.strokes);
   }
 
   undo(): boolean {
-    this.activeStroke = null;
-    this.surface.endStroke();
+    if (this.activeStroke) {
+      this.activeStroke = null;
+      this.surface.redraw(this.strokes);
+    }
     if (this.strokes.length === 0) return false;
     this.strokes.pop();
     this.surface.redraw(this.strokes);
@@ -59,7 +60,6 @@ export class DrawingSession {
 
   replaceStrokes(strokes: readonly Stroke[]): void {
     this.activeStroke = null;
-    this.surface.endStroke();
     this.strokes.length = 0;
     this.strokes.push(...strokes.map(cloneStroke));
     this.surface.redraw(this.strokes);
