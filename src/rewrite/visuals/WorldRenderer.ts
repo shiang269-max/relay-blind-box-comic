@@ -58,10 +58,10 @@ export class WorldRenderer {
     else this.paintSpace(ctx, width, height);
   }
 
-  paintDynamic(ctx: CanvasRenderingContext2D, camera: Camera, now: number): void {
+  paintDynamic(ctx: CanvasRenderingContext2D, _camera: Camera, now: number): void {
     const elapsed = (now - this.animationStart) / 1000;
-    if (this.map === "earth") this.paintEarthMotion(ctx, camera, elapsed);
-    else this.paintSpaceMotion(ctx, camera, elapsed);
+    if (this.map === "earth") this.paintEarthMotion(ctx, elapsed);
+    else this.paintSpaceMotion(ctx, elapsed);
   }
 
   private paintEarth(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -122,11 +122,11 @@ export class WorldRenderer {
     ctx.save();
     ctx.fillStyle = rgba(244, 239, 220, 0.34 * strength);
     for (let i = 0; i < 42; i += 1) {
-      const x = random() * width;
-      const y = random() * height * 0.38;
+      const starX = random() * width;
+      const starY = random() * height * 0.38;
       const r = 1.2 + random() * 1.5;
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, TAU);
+      ctx.arc(starX, starY, r, 0, TAU);
       ctx.fill();
     }
     ctx.restore();
@@ -139,7 +139,6 @@ export class WorldRenderer {
     ctx.beginPath();
     ctx.moveTo(0, height * baseline);
     for (let i = 0; i <= 12; i += 1) {
-      const x = width * (i / 12);
       const peak = height * (baseline - amplitude * (0.55 + random() * 0.75));
       const nextX = width * ((i + 0.5) / 12);
       const nextPeak = height * (baseline - amplitude * (0.35 + random() * 0.65));
@@ -272,7 +271,7 @@ export class WorldRenderer {
     ctx.stroke();
   }
 
-  private paintEarthMotion(ctx: CanvasRenderingContext2D, camera: Camera, elapsed: number): void {
+  private paintEarthMotion(ctx: CanvasRenderingContext2D, elapsed: number): void {
     const drift = (elapsed * 10) % 2400;
     const clouds = [
       { x: 310, y: 360, scale: 1.05, speed: 1 },
@@ -286,7 +285,6 @@ export class WorldRenderer {
       this.drawCloud(ctx, x, y, cloud.scale);
     }
     ctx.restore();
-    void camera;
   }
 
   private drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number): void {
@@ -298,7 +296,7 @@ export class WorldRenderer {
     ctx.fill();
   }
 
-  private paintSpaceMotion(ctx: CanvasRenderingContext2D, camera: Camera, elapsed: number): void {
+  private paintSpaceMotion(ctx: CanvasRenderingContext2D, elapsed: number): void {
     const cycle = elapsed % 9;
     if (cycle > 2.1) return;
     const progress = cycle / 2.1;
@@ -314,6 +312,5 @@ export class WorldRenderer {
     ctx.lineTo(x - 105, y - 38);
     ctx.stroke();
     ctx.restore();
-    void camera;
   }
 }
