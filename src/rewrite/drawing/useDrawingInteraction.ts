@@ -45,8 +45,9 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
   }, [state, surfaceRef]);
   useEffect(() => () => stopInertia(), [stopInertia]);
 
-  // Keep high-frequency drawing on the native canvas event path instead of
-  // React's synthetic pointer event dispatch.
+  // Touch/pen drawing uses one native pointermove path. Do not combine it
+  // with pointerrawupdate: browsers can deliver both for the same movement,
+  // which makes the synchronous Canvas work happen twice and creates a queue.
   useEffect(() => {
     const surface = surfaceRef.current;
     if (!surface) return;
@@ -62,21 +63,8 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
       session.move(currentSurface.eventToWorld(latestPointerEvent(event)), brush());
     };
 
-    const drawRaw = (event: PointerEvent) => {
-      if (moveMode || drawingId.current !== event.pointerId || event.pointerType === "mouse") return;
-      const currentSurface = surfaceRef.current;
-      const session = sessionRef.current;
-      if (!currentSurface || !session) return;
-      nativeDrawingPointers.current.add(event.pointerId);
-      session.move(currentSurface.eventToWorld(event), brush());
-    };
-
     canvas.addEventListener("pointermove", drawNative, { passive: false });
-    window.addEventListener("pointerrawupdate", drawRaw);
-    return () => {
-      canvas.removeEventListener("pointermove", drawNative);
-      window.removeEventListener("pointerrawupdate", drawRaw);
-    };
+    return () => canvas.removeEventListener("pointermove", drawNative);
   }, [brush, moveMode, sessionRef, surfaceRef]);
 
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -98,6 +86,12 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     const surface = surfaceRef.current, session = sessionRef.current;
     if (!surface || !session) return;
     const native = event.nativeEvent;
+
+    // For the single touch/pen drawing pointer, native pointermove already
+    // owns the hot path. Skip React event processing entirely so it cannot
+    // add another layout/state/input-dispatch step behind the finger.
+    if (!moveMode && drawingId.current === native.pointerId && native.pointerType !== "mouse") return;
+
     const pointEvent = latestPointerEvent(native);
     const screen = surface.eventToScreen(pointEvent);
     if (pointers.current.has(native.pointerId)) pointers.current.set(native.pointerId, screen);
