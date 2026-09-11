@@ -3,7 +3,7 @@ import type { Stroke } from "./Stroke";
 import type { MapType, TimeOfDay } from "../domain";
 
 export interface Brush { color: string; size: number; eraser: boolean; }
-export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; }
+export interface SurfaceOptions { worldWidth: number; worldHeight: number; map: MapType; time: TimeOfDay; round?: number; }
 const EXPORT_MAX_WIDTH = 1800;
 const EXPORT_MAX_HEIGHT = 2400;
 
@@ -21,6 +21,7 @@ export class DrawingSurface {
   private dpr = 1;
   private lastPoint: Point | null = null;
   private renderFrame: number | null = null;
+  private destroyed = false;
 
   constructor(private readonly viewportCanvas: HTMLCanvasElement, private readonly options: SurfaceOptions) {
     const context = viewportCanvas.getContext("2d");
@@ -43,12 +44,15 @@ export class DrawingSurface {
   }
 
   resize(cssWidth: number, cssHeight: number): void {
+    if (!Number.isFinite(cssWidth) || !Number.isFinite(cssHeight) || cssWidth <= 0 || cssHeight <= 0) return;
     this.cancelRender();
     this.cssWidth = Math.max(1, Math.round(cssWidth));
     this.cssHeight = Math.max(1, Math.round(cssHeight));
     this.dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-    this.viewportCanvas.width = Math.round(this.cssWidth * this.dpr);
-    this.viewportCanvas.height = Math.round(this.cssHeight * this.dpr);
+    const backingWidth = Math.max(1, Math.round(this.cssWidth * this.dpr));
+    const backingHeight = Math.max(1, Math.round(this.cssHeight * this.dpr));
+    if (this.viewportCanvas.width !== backingWidth) this.viewportCanvas.width = backingWidth;
+    if (this.viewportCanvas.height !== backingHeight) this.viewportCanvas.height = backingHeight;
     this.viewportCanvas.style.width = `${this.cssWidth}px`;
     this.viewportCanvas.style.height = `${this.cssHeight}px`;
     this.camera.setViewport(this.cssWidth, this.cssHeight);
@@ -71,15 +75,18 @@ export class DrawingSurface {
     if (!this.camera.isInsideWorld(point)) return false;
     this.lastPoint = point;
     this.drawDot(point, brush);
+    this.cancelRender();
     this.render();
     return true;
   }
 
   continueStroke(point: Point, brush: Brush): void {
     if (!this.lastPoint) return;
-    this.drawSegment(this.lastPoint, point, brush);
+    const from = this.lastPoint;
+    this.drawSegment(from, point, brush);
     this.lastPoint = point;
-    this.requestRender();
+    if (!brush.eraser) this.drawSegmentToViewport(from, point, brush);
+    else this.requestRender();
   }
 
   endStroke(): void {
@@ -116,17 +123,21 @@ export class DrawingSurface {
   }
 
   render(): void {
-    this.cancelRender();
+    if (this.destroyed) return;
     const ctx = this.viewportContext;
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
+    const dpr = this.dpr;
+    const zoom = this.camera.zoom;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = this.options.map === "space" ? "#030711" : "#d8e1dc";
+    ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
     ctx.setTransform(
-      this.dpr * this.camera.zoom,
+      dpr * zoom,
       0,
       0,
-      this.dpr * this.camera.zoom,
-      -this.camera.x * this.dpr * this.camera.zoom,
-      -this.camera.y * this.dpr * this.camera.zoom,
+      dpr * zoom,
+      -this.camera.x * dpr * zoom,
+      -this.camera.y * dpr * zoom,
     );
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "medium";
@@ -136,18 +147,18 @@ export class DrawingSurface {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
-  private requestRender(): void {
-    if (this.renderFrame !== null) return;
+  requestRender(): void {
+    if (this.destroyed || this.renderFrame !== null) return;
     this.renderFrame = window.requestAnimationFrame(() => {
       this.renderFrame = null;
       this.render();
     });
   }
 
-  private cancelRender(): void {
-    if (this.renderFrame === null) return;
-    window.cancelAnimationFrame(this.renderFrame);
-    this.renderFrame = null;
+  destroy(): void {
+    this.destroyed = true;
+    this.lastPoint = null;
+    this.cancelRender();
   }
 
   getStrokeCoverageScore(): number {
@@ -211,6 +222,7 @@ export class DrawingSurface {
     this.strokeContext.save();
     this.strokeContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
     this.strokeContext.strokeStyle = brush.color;
+    this.strokeContext.fillStyle = brush.color;
     this.strokeContext.lineWidth = brush.size;
     this.strokeContext.lineCap = "round";
     this.strokeContext.lineJoin = "round";
@@ -229,5 +241,34 @@ export class DrawingSurface {
     this.strokeContext.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
     this.strokeContext.fill();
     this.strokeContext.restore();
+  }
+
+  private drawSegmentToViewport(from: Point, to: Point, brush: Brush): void {
+    const ctx = this.viewportContext;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.setTransform(
+      this.dpr * this.camera.zoom,
+      0,
+      0,
+      this.dpr * this.camera.zoom,
+      -this.camera.x * this.dpr * this.camera.zoom,
+      -this.camera.y * this.dpr * this.camera.zoom,
+    );
+    ctx.strokeStyle = brush.color;
+    ctx.fillStyle = brush.color;
+    ctx.lineWidth = brush.size;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  private cancelRender(): void {
+    if (this.renderFrame === null) return;
+    window.cancelAnimationFrame(this.renderFrame);
+    this.renderFrame = null;
   }
 }
