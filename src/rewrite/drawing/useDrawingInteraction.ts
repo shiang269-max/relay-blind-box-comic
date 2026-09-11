@@ -13,6 +13,7 @@ function latestPointerEvent(event: PointerEvent): PointerEvent {
 
 export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode, onStrokeEnd, onInteractionChange }: Options) {
   const pointers = useRef(new Map<number, ScreenPoint>());
+  const rawDrawingPointers = useRef(new Set<number>());
   const pending = useRef<{ id: number; start: ScreenPoint } | null>(null);
   const drawingId = useRef<number | null>(null);
   const pinchDistance = useRef<number | null>(null);
@@ -44,10 +45,28 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
   }, [state, surfaceRef]);
   useEffect(() => () => stopInertia(), [stopInertia]);
 
+  // Mobile browsers may throttle pointermove to animation-frame cadence. Use
+  // pointerrawupdate when the browser actually emits it, but keep pointermove
+  // as the fallback for browsers without raw updates.
+  useEffect(() => {
+    const handleRawPointerUpdate = (event: PointerEvent) => {
+      if (moveMode || drawingId.current !== event.pointerId || event.pointerType === "mouse") return;
+      const surface = surfaceRef.current;
+      const session = sessionRef.current;
+      if (!surface || !session) return;
+      rawDrawingPointers.current.add(event.pointerId);
+      session.move(surface.eventToWorld(event), brush());
+    };
+
+    window.addEventListener("pointerrawupdate", handleRawPointerUpdate);
+    return () => window.removeEventListener("pointerrawupdate", handleRawPointerUpdate);
+  }, [brush, moveMode, sessionRef, surfaceRef]);
+
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
     const surface = surfaceRef.current, session = sessionRef.current; if (!surface || !session) return;
     stopInertia(); const screen = surface.eventToScreen(event.nativeEvent); pointers.current.set(event.pointerId, screen);
+    rawDrawingPointers.current.delete(event.pointerId);
     if (moveMode && pointers.current.size >= 2) { pending.current = null; session.cancel(); drawingId.current = null; panPoint.current = null; velocity.current = { x: 0, y: 0, time: 0 }; resetPinch(); state("pinching"); return; }
     if (moveMode) { session.end(); panPoint.current = screen; velocity.current = { x: 0, y: 0, time: performance.now() }; state("moving"); return; }
     if (pointers.current.size > 1) { pending.current = null; session.cancel(); drawingId.current = null; state("idle"); return; }
@@ -87,6 +106,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
       return;
     }
     if (drawingId.current !== native.pointerId) return;
+    if (rawDrawingPointers.current.has(native.pointerId)) return;
     session.move(surface.eventToWorld(pointEvent), brush());
   }, [brush, moveMode, pinch, sessionRef, surfaceRef]);
 
@@ -94,6 +114,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     const canvas = event.currentTarget, session = sessionRef.current;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     pointers.current.delete(event.pointerId);
+    rawDrawingPointers.current.delete(event.pointerId);
     if (moveMode && pointers.current.size >= 2) { session?.cancel(); resetPinch(); return; }
     if (pointers.current.size === 1) { pending.current = null; drawingId.current = null; panPoint.current = moveMode ? [...pointers.current.values()][0] : null; velocity.current = { x: 0, y: 0, time: performance.now() }; session?.cancel(); state(moveMode ? "moving" : "idle"); return; }
     pinchDistance.current = null; pinchCenter.current = null; const wasMoving = moveMode && panPoint.current !== null; panPoint.current = null;
