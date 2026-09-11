@@ -19,6 +19,10 @@ export class DrawingSurface {
   private cssWidth = 1;
   private cssHeight = 1;
   private dpr = 1;
+  private canvasLeft = 0;
+  private canvasTop = 0;
+  private canvasRectWidth = 1;
+  private canvasRectHeight = 1;
   private lastPoint: Point | null = null;
   private renderFrame: number | null = null;
   private destroyed = false;
@@ -49,6 +53,11 @@ export class DrawingSurface {
     this.cssWidth = Math.max(1, Math.round(cssWidth));
     this.cssHeight = Math.max(1, Math.round(cssHeight));
     this.dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    const rect = this.viewportCanvas.getBoundingClientRect();
+    this.canvasLeft = rect.left;
+    this.canvasTop = rect.top;
+    this.canvasRectWidth = Math.max(1, rect.width);
+    this.canvasRectHeight = Math.max(1, rect.height);
     const backingWidth = Math.max(1, Math.round(this.cssWidth * this.dpr));
     const backingHeight = Math.max(1, Math.round(this.cssHeight * this.dpr));
     if (this.viewportCanvas.width !== backingWidth) this.viewportCanvas.width = backingWidth;
@@ -60,10 +69,9 @@ export class DrawingSurface {
   }
 
   eventToScreen(event: PointerEvent | WheelEvent): Point {
-    const rect = this.viewportCanvas.getBoundingClientRect();
     return {
-      x: (event.clientX - rect.left) * this.cssWidth / Math.max(1, rect.width),
-      y: (event.clientY - rect.top) * this.cssHeight / Math.max(1, rect.height),
+      x: (event.clientX - this.canvasLeft) * this.cssWidth / this.canvasRectWidth,
+      y: (event.clientY - this.canvasTop) * this.cssHeight / this.canvasRectHeight,
     };
   }
 
@@ -83,18 +91,9 @@ export class DrawingSurface {
   continueStroke(point: Point, brush: Brush): void {
     if (!this.lastPoint) return;
     const from = this.lastPoint;
-    const distance = Math.hypot(point.x - from.x, point.y - from.y);
-    const spacing = Math.max(1, Math.min(brush.size * 0.55, 3));
-    const steps = Math.max(1, Math.ceil(distance / spacing));
-    let previous = from;
-    for (let index = 1; index <= steps; index += 1) {
-      const ratio = index / steps;
-      const next = { x: from.x + (point.x - from.x) * ratio, y: from.y + (point.y - from.y) * ratio };
-      this.drawSegment(previous, next, brush);
-      previous = next;
-    }
+    this.drawSegment(from, point, brush);
     this.lastPoint = point;
-    if (!brush.eraser) this.drawInterpolatedSegmentToViewport(from, point, brush);
+    if (!brush.eraser) this.drawSegmentToViewport(from, point, brush);
     else this.requestRender();
   }
 
@@ -223,75 +222,53 @@ export class DrawingSurface {
     this.drawDot(first, stroke.brush);
     let previous = first;
     for (const point of rest) {
-      const distance = Math.hypot(point.x - previous.x, point.y - previous.y);
-      const spacing = Math.max(1, Math.min(stroke.brush.size * 0.55, 3));
-      const steps = Math.max(1, Math.ceil(distance / spacing));
-      let segmentStart = previous;
-      for (let index = 1; index <= steps; index += 1) {
-        const ratio = index / steps;
-        const next = { x: previous.x + (point.x - previous.x) * ratio, y: previous.y + (point.y - previous.y) * ratio };
-        this.drawSegment(segmentStart, next, stroke.brush);
-        segmentStart = next;
-      }
+      this.drawSegment(previous, point, stroke.brush);
       previous = point;
     }
   }
 
   private drawSegment(from: Point, to: Point, brush: Brush): void {
-    this.strokeContext.save();
-    this.strokeContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
-    this.strokeContext.strokeStyle = brush.color;
-    this.strokeContext.fillStyle = brush.color;
-    this.strokeContext.lineWidth = brush.size;
-    this.strokeContext.lineCap = "round";
-    this.strokeContext.lineJoin = "round";
+    this.configureBrush(this.strokeContext, brush);
     this.strokeContext.beginPath();
     this.strokeContext.moveTo(from.x, from.y);
     this.strokeContext.lineTo(to.x, to.y);
     this.strokeContext.stroke();
-    this.strokeContext.restore();
   }
 
   private drawDot(point: Point, brush: Brush): void {
-    this.strokeContext.save();
-    this.strokeContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
-    this.strokeContext.fillStyle = brush.color;
+    this.configureBrush(this.strokeContext, brush);
     this.strokeContext.beginPath();
     this.strokeContext.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
     this.strokeContext.fill();
-    this.strokeContext.restore();
   }
 
-  private drawInterpolatedSegmentToViewport(from: Point, to: Point, brush: Brush): void {
+  private drawSegmentToViewport(from: Point, to: Point, brush: Brush): void {
     const ctx = this.viewportContext;
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(
       this.dpr * this.camera.zoom,
       0,
       0,
-      this.dpr * this.camera.zoom,
+      this.camera.zoom * this.dpr,
       -this.camera.x * this.dpr * this.camera.zoom,
       -this.camera.y * this.dpr * this.camera.zoom,
     );
+    this.configureBrush(ctx, brush);
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  private configureBrush(ctx: CanvasRenderingContext2D, brush: Brush): void {
+    ctx.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
     ctx.strokeStyle = brush.color;
     ctx.fillStyle = brush.color;
     ctx.lineWidth = brush.size;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    const distance = Math.hypot(to.x - from.x, to.y - from.y);
-    const spacing = Math.max(1, Math.min(brush.size * 0.55, 3));
-    const steps = Math.max(1, Math.ceil(distance / spacing));
-    let previous = from;
-    for (let index = 1; index <= steps; index += 1) {
-      const ratio = index / steps;
-      const next = { x: from.x + (to.x - from.x) * ratio, y: from.y + (to.y - from.y) * ratio };
-      ctx.beginPath();
-      ctx.moveTo(previous.x, previous.y);
-      ctx.lineTo(next.x, next.y);
-      ctx.stroke();
-      previous = next;
-    }
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   private cancelRender(): void {
