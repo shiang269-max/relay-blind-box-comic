@@ -24,6 +24,8 @@ export class DrawingSurface {
   private canvasRectWidth = 1;
   private canvasRectHeight = 1;
   private lastPoint: Point | null = null;
+  private livePoints: Point[] = [];
+  private liveBrush: Brush | null = null;
   private renderFrame: number | null = null;
   private destroyed = false;
 
@@ -82,23 +84,29 @@ export class DrawingSurface {
   startStroke(point: Point, brush: Brush): boolean {
     if (!this.camera.isInsideWorld(point)) return false;
     this.lastPoint = point;
-    this.drawDot(point, brush);
-    this.cancelRender();
-    this.render();
+    this.livePoints = [point];
+    this.liveBrush = { ...brush };
+    this.beginLiveViewport(brush);
+    this.drawDotToViewport(point, brush);
     return true;
   }
 
   continueStroke(point: Point, brush: Brush): void {
     if (!this.lastPoint) return;
     const from = this.lastPoint;
-    this.drawSegment(from, point, brush);
     this.lastPoint = point;
-    if (!brush.eraser) this.drawSegmentToViewport(from, point, brush);
-    else this.requestRender();
+    this.livePoints.push(point);
+    this.drawLiveSegment(from, point, brush);
   }
 
   endStroke(): void {
+    if (this.lastPoint && this.livePoints.length > 0 && this.liveBrush) {
+      this.commitLiveStroke();
+    }
     this.lastPoint = null;
+    this.livePoints = [];
+    this.liveBrush = null;
+    this.resetViewportTransform();
     this.cancelRender();
     this.render();
   }
@@ -140,14 +148,7 @@ export class DrawingSurface {
     ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
     ctx.fillStyle = this.options.map === "space" ? "#030711" : "#d8e1dc";
     ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
-    ctx.setTransform(
-      dpr * zoom,
-      0,
-      0,
-      dpr * zoom,
-      -this.camera.x * dpr * zoom,
-      -this.camera.y * dpr * zoom,
-    );
+    ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, -this.camera.x * dpr * zoom, -this.camera.y * dpr * zoom);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "medium";
     ctx.drawImage(this.worldBackgroundCanvas, 0, 0);
@@ -167,6 +168,8 @@ export class DrawingSurface {
   destroy(): void {
     this.destroyed = true;
     this.lastPoint = null;
+    this.livePoints = [];
+    this.liveBrush = null;
     this.cancelRender();
   }
 
@@ -216,50 +219,71 @@ export class DrawingSurface {
     this.worldBackgroundContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
   }
 
+  private beginLiveViewport(brush: Brush): void {
+    const ctx = this.viewportContext;
+    ctx.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
+    ctx.setTransform(this.dpr * this.camera.zoom, 0, 0, this.dpr * this.camera.zoom, -this.camera.x * this.dpr * this.camera.zoom, -this.camera.y * this.dpr * this.camera.zoom);
+    this.configureBrush(ctx, brush);
+  }
+
+  private drawDotToViewport(point: Point, brush: Brush): void {
+    const ctx = this.viewportContext;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  private drawLiveSegment(from: Point, to: Point, brush: Brush): void {
+    const ctx = this.viewportContext;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+    if (brush.eraser) this.drawSegment(this.strokeContext, from, to, brush);
+  }
+
+  private commitLiveStroke(): void {
+    const brush = this.liveBrush;
+    if (!brush) return;
+    if (brush.eraser) return;
+    const first = this.livePoints[0];
+    if (!first) return;
+    this.configureBrush(this.strokeContext, brush);
+    this.strokeContext.beginPath();
+    this.strokeContext.moveTo(first.x, first.y);
+    for (let i = 1; i < this.livePoints.length; i += 1) {
+      const point = this.livePoints[i];
+      this.strokeContext.lineTo(point.x, point.y);
+    }
+    this.strokeContext.stroke();
+    this.drawDot(this.strokeContext, first, brush);
+  }
+
   private drawStroke(stroke: Stroke): void {
     const [first, ...rest] = stroke.points;
     if (!first) return;
-    this.drawDot(first, stroke.brush);
-    let previous = first;
-    for (const point of rest) {
-      this.drawSegment(previous, point, stroke.brush);
-      previous = point;
-    }
-  }
-
-  private drawSegment(from: Point, to: Point, brush: Brush): void {
-    this.configureBrush(this.strokeContext, brush);
+    this.drawDot(this.strokeContext, first, stroke.brush);
+    if (rest.length === 0) return;
+    this.configureBrush(this.strokeContext, stroke.brush);
     this.strokeContext.beginPath();
-    this.strokeContext.moveTo(from.x, from.y);
-    this.strokeContext.lineTo(to.x, to.y);
+    this.strokeContext.moveTo(first.x, first.y);
+    for (const point of rest) this.strokeContext.lineTo(point.x, point.y);
     this.strokeContext.stroke();
   }
 
-  private drawDot(point: Point, brush: Brush): void {
-    this.configureBrush(this.strokeContext, brush);
-    this.strokeContext.beginPath();
-    this.strokeContext.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
-    this.strokeContext.fill();
-  }
-
-  private drawSegmentToViewport(from: Point, to: Point, brush: Brush): void {
-    const ctx = this.viewportContext;
-    ctx.globalCompositeOperation = "source-over";
-    ctx.setTransform(
-      this.dpr * this.camera.zoom,
-      0,
-      0,
-      this.camera.zoom * this.dpr,
-      -this.camera.x * this.dpr * this.camera.zoom,
-      -this.camera.y * this.dpr * this.camera.zoom,
-    );
+  private drawSegment(ctx: CanvasRenderingContext2D, from: Point, to: Point, brush: Brush): void {
     this.configureBrush(ctx, brush);
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
     ctx.lineTo(to.x, to.y);
     ctx.stroke();
-    ctx.globalCompositeOperation = "source-over";
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  private drawDot(ctx: CanvasRenderingContext2D, point: Point, brush: Brush): void {
+    this.configureBrush(ctx, brush);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
+    ctx.fill();
   }
 
   private configureBrush(ctx: CanvasRenderingContext2D, brush: Brush): void {
@@ -269,6 +293,11 @@ export class DrawingSurface {
     ctx.lineWidth = brush.size;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
+  }
+
+  private resetViewportTransform(): void {
+    this.viewportContext.globalCompositeOperation = "source-over";
+    this.viewportContext.setTransform(1, 0, 0, 1, 0, 0);
   }
 
   private cancelRender(): void {
