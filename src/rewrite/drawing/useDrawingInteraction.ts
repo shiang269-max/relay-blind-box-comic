@@ -4,14 +4,14 @@ import type { DrawingSurface, Brush } from "./DrawingSurface";
 
 type ScreenPoint = { x: number; y: number };
 type InteractionState = "idle" | "drawing" | "moving" | "pinching" | "eraser";
-interface Options { canvasRef: React.RefObject<HTMLCanvasElement | null>; surfaceRef: React.RefObject<DrawingSurface | null>; sessionRef: React.RefObject<DrawingSession | null>; brush: () => Brush; moveMode: boolean; onStrokeEnd?: () => void; onInteractionChange?: (state: InteractionState) => void; }
+interface Options { surfaceRef: React.RefObject<DrawingSurface | null>; sessionRef: React.RefObject<DrawingSession | null>; brush: () => Brush; moveMode: boolean; onStrokeEnd?: () => void; onInteractionChange?: (state: InteractionState) => void; }
 
 function latestPointerEvent(event: PointerEvent): PointerEvent {
   const coalesced = event.getCoalescedEvents?.();
   return coalesced && coalesced.length > 0 ? coalesced[coalesced.length - 1] : event;
 }
 
-export function useDrawingInteraction({ canvasRef, surfaceRef, sessionRef, brush, moveMode, onStrokeEnd, onInteractionChange }: Options) {
+export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode, onStrokeEnd, onInteractionChange }: Options) {
   const pointers = useRef(new Map<number, ScreenPoint>());
   const nativeDrawingPointers = useRef(new Set<number>());
   const pending = useRef<{ id: number; start: ScreenPoint } | null>(null);
@@ -45,28 +45,30 @@ export function useDrawingInteraction({ canvasRef, surfaceRef, sessionRef, brush
   }, [state, surfaceRef]);
   useEffect(() => () => stopInertia(), [stopInertia]);
 
-  // Keep the high-frequency drawing path on native canvas events. This avoids
-  // React's synthetic event dispatch in the touch-to-canvas path.
+  // Keep high-frequency drawing on the native canvas event path instead of
+  // React's synthetic pointer event dispatch.
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const surface = surfaceRef.current;
+    if (!surface) return;
+    const canvas = (surface as unknown as { viewportCanvas?: HTMLCanvasElement }).viewportCanvas;
     if (!canvas) return;
 
     const drawNative = (event: PointerEvent) => {
       if (moveMode || drawingId.current !== event.pointerId || event.pointerType === "mouse") return;
-      const surface = surfaceRef.current;
+      const currentSurface = surfaceRef.current;
       const session = sessionRef.current;
-      if (!surface || !session) return;
+      if (!currentSurface || !session) return;
       nativeDrawingPointers.current.add(event.pointerId);
-      session.move(surface.eventToWorld(latestPointerEvent(event)), brush());
+      session.move(currentSurface.eventToWorld(latestPointerEvent(event)), brush());
     };
 
     const drawRaw = (event: PointerEvent) => {
       if (moveMode || drawingId.current !== event.pointerId || event.pointerType === "mouse") return;
-      const surface = surfaceRef.current;
+      const currentSurface = surfaceRef.current;
       const session = sessionRef.current;
-      if (!surface || !session) return;
+      if (!currentSurface || !session) return;
       nativeDrawingPointers.current.add(event.pointerId);
-      session.move(surface.eventToWorld(event), brush());
+      session.move(currentSurface.eventToWorld(event), brush());
     };
 
     canvas.addEventListener("pointermove", drawNative, { passive: false });
@@ -75,7 +77,7 @@ export function useDrawingInteraction({ canvasRef, surfaceRef, sessionRef, brush
       canvas.removeEventListener("pointermove", drawNative);
       window.removeEventListener("pointerrawupdate", drawRaw);
     };
-  }, [brush, canvasRef, moveMode, sessionRef, surfaceRef]);
+  }, [brush, moveMode, sessionRef, surfaceRef]);
 
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
