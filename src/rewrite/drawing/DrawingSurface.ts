@@ -83,9 +83,18 @@ export class DrawingSurface {
   continueStroke(point: Point, brush: Brush): void {
     if (!this.lastPoint) return;
     const from = this.lastPoint;
-    this.drawSegment(from, point, brush);
+    const distance = Math.hypot(point.x - from.x, point.y - from.y);
+    const spacing = Math.max(1, Math.min(brush.size * 0.55, 3));
+    const steps = Math.max(1, Math.ceil(distance / spacing));
+    let previous = from;
+    for (let index = 1; index <= steps; index += 1) {
+      const ratio = index / steps;
+      const next = { x: from.x + (point.x - from.x) * ratio, y: from.y + (point.y - from.y) * ratio };
+      this.drawSegment(previous, next, brush);
+      previous = next;
+    }
     this.lastPoint = point;
-    if (!brush.eraser) this.drawSegmentToViewport(from, point, brush);
+    if (!brush.eraser) this.drawInterpolatedSegmentToViewport(from, point, brush);
     else this.requestRender();
   }
 
@@ -129,6 +138,7 @@ export class DrawingSurface {
     const zoom = this.camera.zoom;
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, this.cssWidth, this.cssHeight);
     ctx.fillStyle = this.options.map === "space" ? "#030711" : "#d8e1dc";
     ctx.fillRect(0, 0, this.cssWidth, this.cssHeight);
     ctx.setTransform(
@@ -213,7 +223,16 @@ export class DrawingSurface {
     this.drawDot(first, stroke.brush);
     let previous = first;
     for (const point of rest) {
-      this.drawSegment(previous, point, stroke.brush);
+      const distance = Math.hypot(point.x - previous.x, point.y - previous.y);
+      const spacing = Math.max(1, Math.min(stroke.brush.size * 0.55, 3));
+      const steps = Math.max(1, Math.ceil(distance / spacing));
+      let segmentStart = previous;
+      for (let index = 1; index <= steps; index += 1) {
+        const ratio = index / steps;
+        const next = { x: previous.x + (point.x - previous.x) * ratio, y: previous.y + (point.y - previous.y) * ratio };
+        this.drawSegment(segmentStart, next, stroke.brush);
+        segmentStart = next;
+      }
       previous = point;
     }
   }
@@ -233,17 +252,7 @@ export class DrawingSurface {
     this.strokeContext.restore();
   }
 
-  private drawDot(point: Point, brush: Brush): void {
-    this.strokeContext.save();
-    this.strokeContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
-    this.strokeContext.fillStyle = brush.color;
-    this.strokeContext.beginPath();
-    this.strokeContext.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
-    this.strokeContext.fill();
-    this.strokeContext.restore();
-  }
-
-  private drawSegmentToViewport(from: Point, to: Point, brush: Brush): void {
+  private drawInterpolatedSegmentToViewport(from: Point, to: Point, brush: Brush): void {
     const ctx = this.viewportContext;
     ctx.globalCompositeOperation = "source-over";
     ctx.setTransform(
@@ -259,10 +268,19 @@ export class DrawingSurface {
     ctx.lineWidth = brush.size;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
+    const distance = Math.hypot(to.x - from.x, to.y - from.y);
+    const spacing = Math.max(1, Math.min(brush.size * 0.55, 3));
+    const steps = Math.max(1, Math.ceil(distance / spacing));
+    let previous = from;
+    for (let index = 1; index <= steps; index += 1) {
+      const ratio = index / steps;
+      const next = { x: from.x + (to.x - from.x) * ratio, y: from.y + (to.y - from.y) * ratio };
+      ctx.beginPath();
+      ctx.moveTo(previous.x, previous.y);
+      ctx.lineTo(next.x, next.y);
+      ctx.stroke();
+      previous = next;
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
