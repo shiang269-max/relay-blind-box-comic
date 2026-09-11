@@ -101,7 +101,7 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
   useEffect(() => { const handleVisibilityChange = () => { if (document.visibilityState !== "hidden") return; if (autosaveTimerRef.current !== null) { window.clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null; } void saveSnapshotNow(); }; document.addEventListener("visibilitychange", handleVisibilityChange); return () => document.removeEventListener("visibilitychange", handleVisibilityChange); }, [saveSnapshotNow]);
 
   const { handlePointerDown, handlePointerMove, finishPointer, handleWheel } = useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode, onStrokeEnd: scheduleAutosave, onInteractionChange: setInteraction });
-  useEffect(() => { const canvas = canvasRef.current; if (!canvas) return; canvas.addEventListener("wheel", handleWheel, { passive: false }); return () => canvas.removeEventListener("wheel", handleWheel); }, [handleWheel]);
+  useEffect(() => { const container = containerRef.current; if (!container) return; container.addEventListener("wheel", handleWheel, { passive: false }); return () => container.removeEventListener("wheel", handleWheel); }, [handleWheel]);
 
   const handleSubmit = async () => {
     const session = sessionRef.current, lifecycle = lifecycleRef.current, surface = surfaceRef.current; if (!session || !lifecycle || !surface || submitting || loadingDrawing || leaving) return;
@@ -138,7 +138,7 @@ export default function DrawingScreen({ mode, roomId, gameId, pageIndex, round, 
       {submitError && <div className="mt-2 rounded-xl border border-red-300/20 bg-red-950/45 px-3 py-2 text-xs text-red-100">{submitError}</div>}
     </header>
 
-    <main ref={containerRef} className="relative z-10 min-h-0 flex-1 overflow-hidden">
+    <main ref={containerRef} className="relative z-10 min-h-0 flex-1 overflow-hidden overscroll-none [contain:paint] [isolation:isolate]">
       <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full touch-none select-none" style={{ touchAction: "none" }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={finishPointer} onPointerCancel={finishPointer} />
       <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
       <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-xl border border-white/15 bg-slate-950/70 px-3 py-2 text-xs font-bold shadow-lg backdrop-blur-md"><ModeIcon size={18} />{modeLabel}</div>
