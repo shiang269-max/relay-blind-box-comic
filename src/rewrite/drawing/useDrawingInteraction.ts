@@ -52,23 +52,20 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     if (moveMode) { session.end(); panPoint.current = screen; velocity.current = { x: 0, y: 0, time: performance.now() }; state("moving"); return; }
     if (pointers.current.size > 1) { pending.current = null; session.cancel(); drawingId.current = null; state("idle"); return; }
     pending.current = null; drawingId.current = event.pointerId;
-    if (!session.begin(surface.eventToWorld(event.nativeEvent), brush())) { drawingId.current = null; state("idle"); return; }
-    state(brush().eraser ? "eraser" : "drawing");
+    const currentBrush = brush();
+    if (!session.begin(surface.eventToWorld(event.nativeEvent), currentBrush)) { drawingId.current = null; state("idle"); return; }
+    state(currentBrush.eraser ? "eraser" : "drawing");
   }, [brush, moveMode, resetPinch, sessionRef, state, stopInertia, surfaceRef]);
 
-  const drawMove = useCallback((event: PointerEvent, surface: DrawingSurface, session: DrawingSession) => {
-    if (drawingId.current !== event.pointerId) return;
-    const pointEvent = latestPointerEvent(event);
-    session.move(surface.eventToWorld(pointEvent), brush());
-    state(brush().eraser ? "eraser" : "drawing");
-  }, [brush, state]);
-
   const handlePointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
-    event.preventDefault(); const surface = surfaceRef.current, session = sessionRef.current; if (!surface || !session) return;
+    event.preventDefault();
+    const surface = surfaceRef.current, session = sessionRef.current;
+    if (!surface || !session) return;
     const native = event.nativeEvent;
     const pointEvent = latestPointerEvent(native);
     const screen = surface.eventToScreen(pointEvent);
     if (pointers.current.has(native.pointerId)) pointers.current.set(native.pointerId, screen);
+
     if (moveMode && pointers.current.size >= 2) {
       const value = pinch();
       if (value && pinchDistance.current && pinchCenter.current) {
@@ -77,7 +74,6 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
       }
       pinchDistance.current = value?.distance ?? null;
       pinchCenter.current = value?.center ?? null;
-      state("pinching");
       surface.requestRender();
       return;
     }
@@ -87,12 +83,12 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
       surface.camera.panByScreen(dx, dy);
       panPoint.current = screen;
       velocity.current = { x: dx / dt, y: dy / dt, time: now };
-      state("moving");
       surface.requestRender();
       return;
     }
-    drawMove(native, surface, session);
-  }, [drawMove, moveMode, pinch, sessionRef, state, surfaceRef]);
+    if (drawingId.current !== native.pointerId) return;
+    session.move(surface.eventToWorld(pointEvent), brush());
+  }, [brush, moveMode, pinch, sessionRef, surfaceRef]);
 
   const finishPointer = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget, session = sessionRef.current;
