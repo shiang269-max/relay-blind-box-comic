@@ -252,6 +252,16 @@ export class DrawingSurface {
     this.strokeContext.restore();
   }
 
+  private drawDot(point: Point, brush: Brush): void {
+    this.strokeContext.save();
+    this.strokeContext.globalCompositeOperation = brush.eraser ? "destination-out" : "source-over";
+    this.strokeContext.fillStyle = brush.color;
+    this.strokeContext.beginPath();
+    this.strokeContext.arc(point.x, point.y, Math.max(brush.size / 2, 0.5), 0, Math.PI * 2);
+    this.strokeContext.fill();
+    this.strokeContext.restore();
+  }
+
   private drawInterpolatedSegmentToViewport(from: Point, to: Point, brush: Brush): void {
     const ctx = this.viewportContext;
     ctx.globalCompositeOperation = "source-over";
