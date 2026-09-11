@@ -9,9 +9,8 @@ export interface Size {
 }
 
 /**
- * 唯一 Camera：背景、上一頁內容與本回合筆劃共用同一世界座標。
- *
- * 縮小用於總覽，放大用於作畫；不再把低解析世界放大到 8 倍。
+ * 世界 Camera：背景、上一頁內容與本回合筆劃共用同一世界座標。
+ * Camera 只控制 viewport 內的世界，不會改變頁面 UI 的尺寸。
  */
 export class Camera {
   private viewport: Size = { width: 1, height: 1 };
@@ -32,6 +31,8 @@ export class Camera {
   get maximumZoom(): number { return Math.max(this.fitZoom(), this.maxZoom); }
   get viewportWidth(): number { return this.viewport.width; }
   get viewportHeight(): number { return this.viewport.height; }
+  get worldWidth(): number { return this.world.width; }
+  get worldHeight(): number { return this.world.height; }
 
   setViewport(width: number, height: number): void {
     const nextViewport = { width: Math.max(1, width), height: Math.max(1, height) };
