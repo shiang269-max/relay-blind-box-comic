@@ -55,30 +55,27 @@ export class DrawingSurface {
     this.cssWidth = Math.max(1, Math.round(cssWidth));
     this.cssHeight = Math.max(1, Math.round(cssHeight));
     this.dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
-    const rect = this.viewportCanvas.getBoundingClientRect();
-    this.canvasLeft = rect.left;
-    this.canvasTop = rect.top;
-    this.canvasRectWidth = Math.max(1, rect.width);
-    this.canvasRectHeight = Math.max(1, rect.height);
+    this.viewportCanvas.style.width = `${this.cssWidth}px`;
+    this.viewportCanvas.style.height = `${this.cssHeight}px`;
+    this.refreshCanvasRect();
     const backingWidth = Math.max(1, Math.round(this.cssWidth * this.dpr));
     const backingHeight = Math.max(1, Math.round(this.cssHeight * this.dpr));
     if (this.viewportCanvas.width !== backingWidth) this.viewportCanvas.width = backingWidth;
     if (this.viewportCanvas.height !== backingHeight) this.viewportCanvas.height = backingHeight;
-    this.viewportCanvas.style.width = `${this.cssWidth}px`;
-    this.viewportCanvas.style.height = `${this.cssHeight}px`;
     this.camera.setViewport(this.cssWidth, this.cssHeight);
     this.render();
   }
 
-  eventToScreen(event: PointerEvent | WheelEvent): Point {
+  eventToScreen(event: PointerEvent | WheelEvent, refreshLayout = false): Point {
+    if (refreshLayout) this.refreshCanvasRect();
     return {
       x: (event.clientX - this.canvasLeft) * this.cssWidth / this.canvasRectWidth,
       y: (event.clientY - this.canvasTop) * this.cssHeight / this.canvasRectHeight,
     };
   }
 
-  eventToWorld(event: PointerEvent): Point {
-    return this.camera.screenToWorld(this.eventToScreen(event));
+  eventToWorld(event: PointerEvent, refreshLayout = false): Point {
+    return this.camera.screenToWorld(this.eventToScreen(event, refreshLayout));
   }
 
   startStroke(point: Point, brush: Brush): boolean {
@@ -217,6 +214,14 @@ export class DrawingSurface {
 
   private paintWorldBackground(): void {
     this.worldBackgroundContext.clearRect(0, 0, this.options.worldWidth, this.options.worldHeight);
+  }
+
+  private refreshCanvasRect(): void {
+    const rect = this.viewportCanvas.getBoundingClientRect();
+    this.canvasLeft = rect.left;
+    this.canvasTop = rect.top;
+    this.canvasRectWidth = Math.max(1, rect.width);
+    this.canvasRectHeight = Math.max(1, rect.height);
   }
 
   private beginLiveViewport(brush: Brush): void {
