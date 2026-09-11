@@ -48,6 +48,8 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
   // Touch/pen drawing uses one native pointermove path. Do not combine it
   // with pointerrawupdate: browsers can deliver both for the same movement,
   // which makes the synchronous Canvas work happen twice and creates a queue.
+  // This path intentionally keeps the cached coordinate conversion from the
+  // mobile-normal checkpoint.
   useEffect(() => {
     const surface = surfaceRef.current;
     if (!surface) return;
@@ -70,14 +72,14 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
   const handlePointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
     const surface = surfaceRef.current, session = sessionRef.current; if (!surface || !session) return;
-    stopInertia(); const screen = surface.eventToScreen(event.nativeEvent); pointers.current.set(event.pointerId, screen);
+    stopInertia(); const screen = surface.eventToScreen(event.nativeEvent, event.pointerType === "mouse"); pointers.current.set(event.pointerId, screen);
     nativeDrawingPointers.current.delete(event.pointerId);
     if (moveMode && pointers.current.size >= 2) { pending.current = null; session.cancel(); drawingId.current = null; panPoint.current = null; velocity.current = { x: 0, y: 0, time: 0 }; resetPinch(); state("pinching"); return; }
     if (moveMode) { session.end(); panPoint.current = screen; velocity.current = { x: 0, y: 0, time: performance.now() }; state("moving"); return; }
     if (pointers.current.size > 1) { pending.current = null; session.cancel(); drawingId.current = null; state("idle"); return; }
     pending.current = null; drawingId.current = event.pointerId;
     const currentBrush = brush();
-    if (!session.begin(surface.eventToWorld(event.nativeEvent), currentBrush)) { drawingId.current = null; state("idle"); return; }
+    if (!session.begin(surface.eventToWorld(event.nativeEvent, event.pointerType === "mouse"), currentBrush)) { drawingId.current = null; state("idle"); return; }
     state(currentBrush.eraser ? "eraser" : "drawing");
   }, [brush, moveMode, resetPinch, sessionRef, state, stopInertia, surfaceRef]);
 
@@ -93,7 +95,8 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     if (!moveMode && drawingId.current === native.pointerId && native.pointerType !== "mouse") return;
 
     const pointEvent = latestPointerEvent(native);
-    const screen = surface.eventToScreen(pointEvent);
+    const refreshLayout = native.pointerType === "mouse";
+    const screen = surface.eventToScreen(pointEvent, refreshLayout);
     if (pointers.current.has(native.pointerId)) pointers.current.set(native.pointerId, screen);
 
     if (moveMode && pointers.current.size >= 2) {
@@ -117,7 +120,7 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
       return;
     }
     if (drawingId.current !== native.pointerId || nativeDrawingPointers.current.has(native.pointerId)) return;
-    session.move(surface.eventToWorld(pointEvent), brush());
+    session.move(surface.eventToWorld(pointEvent, refreshLayout), brush());
   }, [brush, moveMode, pinch, sessionRef, surfaceRef]);
 
   const finishPointer = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -133,6 +136,6 @@ export function useDrawingInteraction({ surfaceRef, sessionRef, brush, moveMode,
     if (wasMoving) startInertia(); else state("idle");
   }, [moveMode, onStrokeEnd, resetPinch, sessionRef, startInertia, state]);
 
-  const handleWheel = useCallback((event: WheelEvent) => { if (!moveMode) return; event.preventDefault(); const surface = surfaceRef.current; if (!surface) return; stopInertia(); surface.camera.zoomAt(surface.eventToScreen(event), Math.exp(-event.deltaY * 0.0015)); surface.requestRender(); }, [moveMode, stopInertia, surfaceRef]);
+  const handleWheel = useCallback((event: WheelEvent) => { if (!moveMode) return; event.preventDefault(); const surface = surfaceRef.current; if (!surface) return; stopInertia(); surface.camera.zoomAt(surface.eventToScreen(event, true), Math.exp(-event.deltaY * 0.0015)); surface.requestRender(); }, [moveMode, stopInertia, surfaceRef]);
   return { handlePointerDown, handlePointerMove, finishPointer, handleWheel };
 }
