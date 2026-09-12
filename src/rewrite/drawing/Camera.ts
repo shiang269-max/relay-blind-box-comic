@@ -81,7 +81,11 @@ export class Camera {
 
   zoomAt(screen: Point, factor: number): void {
     if (!Number.isFinite(screen.x) || !Number.isFinite(screen.y) || !Number.isFinite(factor) || factor <= 0) return;
-    const anchor = this.screenToWorld(screen);
+    const rawAnchor = this.screenToWorld(screen);
+    const anchor = {
+      x: Math.max(0, Math.min(rawAnchor.x, this.world.width)),
+      y: Math.max(0, Math.min(rawAnchor.y, this.world.height)),
+    };
     const nextZoom = this.clampZoom(this._zoom * factor);
     if (Math.abs(nextZoom - this._zoom) < 1e-9) return;
     this._zoom = nextZoom;
